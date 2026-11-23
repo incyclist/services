@@ -1080,6 +1080,7 @@ describe('RoutesPageService',()=>{
             test('a linkShared route without details loads them for the ride before it starts', async () => {
                 const route = new Route({ id: 'b', linkShared: true, hasVideo: true, isLocal: true })
                 routeList.getSelected.mockReturnValue(route)
+                sharing.loadDescriptor.mockImplementation(async (r: Route) => { r.details = {} as never; return r })
                 service.start()
                 expect(startRide).not.toHaveBeenCalled()
                 expect(sharing.loadDescriptor).toHaveBeenCalledWith(route, 'ride')
@@ -1088,12 +1089,20 @@ describe('RoutesPageService',()=>{
             })
 
             test('the ride does not start when the details can not be loaded', async () => {
-                sharing.loadDescriptor.mockRejectedValue(new Error('unreachable'))
+                sharing.loadDescriptor.mockImplementation(async (r: Route) => r)
                 routeList.getSelected.mockReturnValue(new Route({ id: 'b', linkShared: true }))
                 service.start()
                 await flush()
                 expect(startRide).not.toHaveBeenCalled()
                 expect(s.updatePageDisplay).toHaveBeenCalled()
+            })
+
+            test('the ride does not start when loading the details rejects', async () => {
+                sharing.loadDescriptor.mockRejectedValue(new Error('unreachable'))
+                routeList.getSelected.mockReturnValue(new Route({ id: 'b', linkShared: true }))
+                service.start()
+                await flush()
+                expect(startRide).not.toHaveBeenCalled()
             })
 
             test('other routes and linkShared routes that have their details start right away', () => {

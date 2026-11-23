@@ -448,11 +448,16 @@ export class DeviceAccessService  extends IncyclistService{
      * (e.g. the browse for a paired computer) cannot restart discovery while the app is paused.
      */
     async pauseBackgroundActivity(owner:string=DEFAULT_PAUSE_OWNER):Promise<void> {
-        this.pauseOwners.add(owner)
-        const promises = Object.keys(this.interfaces).map( (name) =>
-            this.getInterface(name)?.pauseBackgroundActivity?.()
-        )
-        await Promise.allSettled(promises)
+        try {
+            this.pauseOwners.add(owner)
+            const promises = Object.keys(this.interfaces).map( (name) =>
+                this.getInterface(name)?.pauseBackgroundActivity?.()
+            )
+            await Promise.allSettled(promises)
+        }
+        catch(err:any) {
+            this.logError(err,'pauseBackgroundActivity')
+        }
     }
 
     /**
@@ -460,14 +465,19 @@ export class DeviceAccessService  extends IncyclistService{
      * still holds it paused.
      */
     async resumeBackgroundActivity(owner:string=DEFAULT_PAUSE_OWNER):Promise<void> {
-        this.pauseOwners.delete(owner)
-        if (this.pauseOwners.size>0)
-            return
+        try {
+            this.pauseOwners.delete(owner)
+            if (this.pauseOwners.size>0)
+                return
 
-        const promises = Object.keys(this.interfaces).map( (name) =>
-            this.getInterface(name)?.resumeBackgroundActivity?.()
-        )
-        await Promise.allSettled(promises)
+            const promises = Object.keys(this.interfaces).map( (name) =>
+                this.getInterface(name)?.resumeBackgroundActivity?.()
+            )
+            await Promise.allSettled(promises)
+        }
+        catch(err:any) {
+            this.logError(err,'resumeBackgroundActivity')
+        }
     }
 
     async terminate(ifaceName?:string):Promise<void> { 

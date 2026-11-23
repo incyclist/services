@@ -1083,8 +1083,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      */
 
     public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
-        if (this.addRouteToLists(route,source))
-            this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+        try {
+            if (this.addRouteToLists(route,source))
+                this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+        }
+        catch(err:any) {
+            this.logError(err,'addRoute')
+        }
     }
 
     /**
@@ -1092,35 +1097,54 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * place (and its card told to redraw).
      */
     public addRoutes(routes:Array<Route>, source:'user'|'system'|'import'='system'):void {
-        let added = false
-        routes.forEach( route => {
-            const known = this.getRoute(route.description.id)
-            added = this.addRouteToLists(route,source) || added
-            if (known)
-                this.findCard(known)?.card?.emitUpdate()
-        })
-        if (added)
-            this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+        try {
+            let added = false
+            routes.forEach( route => {
+                const known = this.getRoute(route.description.id)
+                added = this.addRouteToLists(route,source) || added
+                if (known)
+                    this.findCard(known)?.card?.emitUpdate()
+            })
+            if (added)
+                this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+        }
+        catch(err:any) {
+            this.logError(err,'addRoutes')
+        }
     }
 
-    /** Persists the description (and the details, if the route has them) of a route. */
-    public saveRoute(route:Route, enforceDetails:boolean=false):Promise<void> {
-        return this.db.save(route, enforceDetails)
+    /** Persists the description (and the details, if the route has them) of a route. A failure is logged, never thrown. */
+    public async saveRoute(route:Route, enforceDetails:boolean=false):Promise<void> {
+        try {
+            await this.db.save(route, enforceDetails)
+        }
+        catch(err:any) {
+            this.logError(err,'saveRoute')
+        }
     }
 
     /**
      * Removes a route that was created from a computer's catalog: its description, details and card.
      * No user setting or file of the user is touched.
+     *
+     * @returns false if the route could not be removed (logged, never thrown)
      */
-    public async removeSharedRoute(route:Route):Promise<void> {
-        const id = route.description.id
-        const card = this.findCard(id)?.card
-        if (card) {
-            await card.delete({enforced:true,source:'system'}).wait()
-            return
+    public async removeSharedRoute(route:Route):Promise<boolean> {
+        try {
+            const id = route.description.id
+            const card = this.findCard(id)?.card
+            if (card) {
+                await card.delete({enforced:true,source:'system'}).wait()
+                return true
+            }
+            await this.db.delete(route)
+            this.forgetRoute(id)
+            return true
         }
-        await this.db.delete(route)
-        this.forgetRoute(id)
+        catch(err:any) {
+            this.logError(err,'removeSharedRoute')
+            return false
+        }
     }
 
     /** @returns true if the lists changed and an `updated` event is due */

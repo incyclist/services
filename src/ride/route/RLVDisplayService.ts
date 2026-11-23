@@ -639,32 +639,52 @@ export class RLVDisplayService extends RouteDisplayService {
 
     /** The video of the first source did not load: the next source is tried, once. */
     protected fallThroughToNextSource(error:MediaError, video:VideoState):boolean {
-        if (!video.isInitial || !video.linkId || video.fellThrough)
-            return false
+        try {
+            if (!video.isInitial || !video.linkId || video.fellThrough)
+                return false
 
-        video.fellThrough = true
-        this.applyLinkSource(video, [video.linkId])
-            .then( changed => {
-                if (changed) {
-                    this.logEvent({message: 'video source changed after load failure'})
-                    delete video.error
-                    this.initVideoSource(video)
-                    this.emit('state-update')
-                    return
-                }
-                this.reportVideoLoadError(error,video)
-            })
-            .catch( err=>{ this.logError(err,'fallThroughToNextSource'); this.reportVideoLoadError(error,video) })
-        return true
+            video.fellThrough = true
+            this.applyLinkSource(video, [video.linkId])
+                .then( changed => {
+                    if (changed) {
+                        this.logEvent({message: 'video source changed after load failure'})
+                        delete video.error
+                        this.initVideoSource(video)
+                        this.emit('state-update')
+                        return
+                    }
+                    this.reportVideoLoadError(error,video)
+                })
+                .catch( err=>{ this.logError(err,'fallThroughToNextSource'); this.reportVideoLoadError(error,video) })
+            return true
+        }
+        catch(err) {
+            this.logError(err,'fallThroughToNextSource')
+            return false
+        }
     }
 
     protected onVideoLoadError(error:MediaError, video:VideoState = this.currentVideo )  {
-        if (this.fallThroughToNextSource(error,video))
-            return
-        this.reportVideoLoadError(error,video)
+        try {
+            if (this.fallThroughToNextSource(error,video))
+                return
+            this.reportVideoLoadError(error,video)
+        }
+        catch(err) {
+            this.logError(err,'onVideoLoadError')
+        }
     }
 
     protected reportVideoLoadError(error:MediaError, video:VideoState = this.currentVideo )  {
+        try {
+            this.doReportVideoLoadError(error,video)
+        }
+        catch(err) {
+            this.logError(err,'reportVideoLoadError')
+        }
+    }
+
+    protected doReportVideoLoadError(error:MediaError, video:VideoState)  {
         video.loaded = false
         video.error = this.buildVideoError(error,video)
 
@@ -732,8 +752,13 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected onVideoPlaybackError(error:MediaError, video:VideoState = this.currentVideo ) {
 
-        this.logEvent({message:'video playback error', video:scrubTokens(this.getVideoUrl(video)), error:scrubTokens(error.message), errorCode:this.getCode(error)})
-        this.checkSourceLost(video)
+        try {
+            this.logEvent({message:'video playback error', video:scrubTokens(this.getVideoUrl(video)), error:scrubTokens(error.message), errorCode:this.getCode(error)})
+            this.checkSourceLost(video)
+        }
+        catch(err) {
+            this.logError(err,'onVideoPlaybackError')
+        }
     }
 
     /**
@@ -750,7 +775,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
             this.sourceLost = { computerName }
             this.logEvent({message:'video source lost', computerName})
-            this.sourceLostTimer = setTimeout( ()=>{ this.clearSourceLost(); this.emit('state-update') }, SOURCE_LOST_NOTICE_MS)
+            this.sourceLostTimer = setTimeout( ()=>this.onSourceLostTimer(), SOURCE_LOST_NOTICE_MS)
             this.emit('state-update')
         }
         catch(err) {
@@ -758,11 +783,26 @@ export class RLVDisplayService extends RouteDisplayService {
         }
     }
 
+    protected onSourceLostTimer() {
+        try {
+            this.clearSourceLost()
+            this.emit('state-update')
+        }
+        catch(err) {
+            this.logError(err,'onSourceLostTimer')
+        }
+    }
+
     protected clearSourceLost() {
-        if (this.sourceLostTimer)
-            clearTimeout(this.sourceLostTimer)
-        delete this.sourceLostTimer
-        delete this.sourceLost
+        try {
+            if (this.sourceLostTimer)
+                clearTimeout(this.sourceLostTimer)
+            delete this.sourceLostTimer
+            delete this.sourceLost
+        }
+        catch(err) {
+            this.logError(err,'clearSourceLost')
+        }
     }
 
     protected onVideoPlayBackUpdate(time:number, rate:number,e, video:VideoState = this.currentVideo) {

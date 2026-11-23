@@ -458,10 +458,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     canDelete() {
-        // a route that exists only because a computer shares it has nothing local to delete (without a local copy)
-        if (this.route?.description?.linkShared && !this.hasLocalCopy())
+        try {
+            // a route that exists only because a computer shares it has nothing local to delete (without a local copy)
+            if (this.route?.description?.linkShared && !this.hasLocalCopy())
+                return false
+            return this.deleteable
+        }
+        catch(err:any) {
+            this.logError(err,'canDelete')
             return false
-        return this.deleteable
+        }
     }
 
     /**
@@ -470,13 +476,26 @@ export class RouteCard extends BaseCard implements Card<Route> {
      * @param links the state of the computers, when it was already read for a whole list
      */
     getAvailability(links?: LinkSnapshot): RouteAvailability {
-        return this.getVideoResolver().getRouteAvailability(this.getRouteDescription(), { hasDetails: valid(this.getRouteData()), links })
+        try {
+            return this.getVideoResolver().getRouteAvailability(this.getRouteDescription(), { hasDetails: valid(this.getRouteData()), links })
+        }
+        catch(err:any) {
+            this.logError(err,'getAvailability')
+            // fallback: the route can not be played from anywhere
+            return { canStart: false, availability: 'unavailable', unavailableReason: 'noSource' }
+        }
     }
 
     /** true if the video of the route is a file on this device */
     hasLocalCopy(): boolean {
-        const descr = this.route?.description
-        return !!descr?.isDownloaded && !!descr.videoUrl && !descr.videoUrl.startsWith('http')
+        try {
+            const descr = this.route?.description
+            return !!descr?.isDownloaded && !!descr.videoUrl && !descr.videoUrl.startsWith('http')
+        }
+        catch(err:any) {
+            this.logError(err,'hasLocalCopy')
+            return false
+        }
     }
 
 
@@ -1124,7 +1143,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
      * @param url the `video://` URL of the local file
      */
     async onCopiedToDevice( url:string):Promise<void> {
-        await this.onDownloadCompleted(url)
+        try {
+            await this.onDownloadCompleted(url)
+        }
+        catch(err:any) {
+            this.logError(err,'onCopiedToDevice')
+        }
     }
 
     protected async onDownloadCompleted( url:string) {
@@ -1483,7 +1507,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         try {
             return this.getVideoResolver().hasLinkSource(descr)
         }
-        catch {
+        catch(err:any) {
+            this.logError(err,'hasLinkSource')
             return false
         }
     }

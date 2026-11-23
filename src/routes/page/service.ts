@@ -441,7 +441,13 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     /** The details of a route from a computer are loaded before the ride starts; the video is resolved afterwards. */
     protected startWhenDetailsLoaded(route:Route) {
         this.getSharingClient().loadDescriptor(route,'ride')
-            .then( ()=>{ this.startRide() })
+            .then( loaded=>{
+                // without details (the computer did not hand them out) the ride does not start
+                if (loaded?.details)
+                    this.startRide()
+                else
+                    this.updatePageDisplay()
+            })
             .catch( err=>{
                 this.logError(err,'start')
                 this.updatePageDisplay()
