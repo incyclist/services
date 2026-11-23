@@ -75,4 +75,9 @@ export interface ScanForNewFilter extends ScanFilter {
     blackList?: DeviceSettings[]
 }
 
-
+// Interfaces accept an optional reason (incyclist-devices >= the release that introduced it); older
+// versions ignore the argument, which keeps this call compatible with both
+export type ReasonAwareInterface = {
+    pauseBackgroundActivity?(reason?:string):Promise<void>
+    resumeBackgroundActivity?(reason?:string):Promise<void>
+}

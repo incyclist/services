@@ -3,7 +3,7 @@ import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
 import { sleep } from "../../utils/sleep";
 import { AdapterInfo, InterfaceSetting, useDeviceConfiguration } from "../configuration";
-import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState, ScanForNewFilter, EnrichedInterfaceSetting } from "./model";
+import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState, ScanForNewFilter, EnrichedInterfaceSetting, ReasonAwareInterface } from "./model";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators/Injection";
@@ -438,10 +438,15 @@ export class DeviceAccessService  extends IncyclistService{
      *
      * Connected devices are unaffected and keep streaming, and an explicit scan still runs.
      * Interfaces that do not implement this are skipped.
+     *
+     * @param reason why the pause is requested. The activity only resumes once every reason has been
+     *               released, so independent callers (app in background, ride in progress) don't undo each other.
+     *               Defaults to the app going to the background.
+     * @param ifaceNames restricts the pause to the given interfaces (default: all)
      */
-    async pauseBackgroundActivity():Promise<void> {
-        const promises = Object.keys(this.interfaces).map( (name) =>
-            this.getInterface(name)?.pauseBackgroundActivity?.()
+    async pauseBackgroundActivity(reason?:string, ifaceNames?:string[]):Promise<void> {
+        const promises = this.getBackgroundInterfaces(ifaceNames).map( (name) =>
+            (this.getInterface(name) as ReasonAwareInterface)?.pauseBackgroundActivity?.(reason)
         )
         await Promise.allSettled(promises)
     }
@@ -449,11 +454,16 @@ export class DeviceAccessService  extends IncyclistService{
     /**
      * Resumes the background work suspended by [[pauseBackgroundActivity]].
      */
-    async resumeBackgroundActivity():Promise<void> {
-        const promises = Object.keys(this.interfaces).map( (name) =>
-            this.getInterface(name)?.resumeBackgroundActivity?.()
+    async resumeBackgroundActivity(reason?:string, ifaceNames?:string[]):Promise<void> {
+        const promises = this.getBackgroundInterfaces(ifaceNames).map( (name) =>
+            (this.getInterface(name) as ReasonAwareInterface)?.resumeBackgroundActivity?.(reason)
         )
         await Promise.allSettled(promises)
+    }
+
+    protected getBackgroundInterfaces(ifaceNames?:string[]):string[] {
+        const all = Object.keys(this.interfaces)
+        return ifaceNames ? all.filter( name=> ifaceNames.includes(name) ) : all
     }
 
     async terminate(ifaceName?:string):Promise<void> { 

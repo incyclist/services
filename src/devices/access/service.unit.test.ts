@@ -146,6 +146,57 @@ describe('DeviceAccessService', () => {
   })
 
 
+  describe('pauseBackgroundActivity/resumeBackgroundActivity with a reason', () => {
+    let service: DeviceAccessService
+
+    const setupInterfaces = (impls: Record<string, any>) => {
+      (service as any).interfaces = Object.fromEntries(
+        Object.entries(impls).map(([name, interfaceImpl]) => [name, { interface: interfaceImpl }])
+      )
+    }
+
+    beforeEach(() => {
+      service = new DeviceAccessService()
+    })
+
+    test('forwards the reason to the interfaces', async () => {
+      const ble = { pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined), resumeBackgroundActivity: jest.fn().mockResolvedValue(undefined) }
+      setupInterfaces({ ble })
+
+      await service.pauseBackgroundActivity('ride')
+      await service.resumeBackgroundActivity('ride')
+
+      expect(ble.pauseBackgroundActivity).toHaveBeenCalledWith('ride')
+      expect(ble.resumeBackgroundActivity).toHaveBeenCalledWith('ride')
+    })
+
+    test('without a reason, the interfaces are called without one (app going to the background)', async () => {
+      const ble = { pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined) }
+      setupInterfaces({ ble })
+
+      await service.pauseBackgroundActivity()
+
+      expect(ble.pauseBackgroundActivity).toHaveBeenCalledWith(undefined)
+    })
+
+    test('can be restricted to some interfaces', async () => {
+      const ble = { pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined) }
+      const dc = { pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined) }
+      setupInterfaces({ ble, dc })
+
+      await service.pauseBackgroundActivity('ride', ['ble'])
+
+      expect(ble.pauseBackgroundActivity).toHaveBeenCalledWith('ride')
+      expect(dc.pauseBackgroundActivity).not.toHaveBeenCalled()
+    })
+
+    test('an interface that does not implement it is skipped', async () => {
+      setupInterfaces({ ant: {} })
+
+      await expect(service.pauseBackgroundActivity('ride')).resolves.toBeUndefined()
+    })
+  })
+
   /*
   describe('pauseBackgroundActivity/resumeBackgroundActivity', () => {
     let service: DeviceAccessService

@@ -407,6 +407,44 @@ describe('DeviceRideService',()=>{
                 expect(service.startHealthCheck).toHaveBeenCalledWith(ai)
             })
 
+            test('a restart that never settles is abandoned after a timeout and retried',async ()=>{
+                const ai = createInfo('1')
+                service.startHealthCheck = jest.fn()
+                setLastData(service, ai)
+                // first restart hangs (stalled BLE stack), the second one succeeds
+                ;(ai.adapter.restart as jest.Mock)
+                    .mockImplementationOnce( ()=> new Promise<boolean>( ()=>{} ))
+                    .mockResolvedValue(true)
+
+                const promise = service.prepareReconnect(ai)
+                await jest.advanceTimersByTimeAsync(45000)    // restart timeout
+                await jest.advanceTimersByTimeAsync(60000)    // wait before the retry
+                await promise
+
+                expect(ai.adapter.restart).toHaveBeenCalledTimes(2)
+                expect(service.startHealthCheck).toHaveBeenCalledWith(ai)
+                expect(ai.isRestarting).toBe(false)
+            })
+
+            test('a restart that times out reports the device as red, so the user is told that data is lost',async ()=>{
+                const ai = createInfo('1')
+                ai.dataStatus = 'amber'
+                service.startHealthCheck = jest.fn()
+                ;(service as unknown as { getEnabledCapabilities: unknown }).getEnabledCapabilities = jest.fn().mockReturnValue({enabledCapabilities:[]})
+                setLastData(service, ai)
+                ;(ai.adapter.restart as jest.Mock)
+                    .mockImplementationOnce( ()=> new Promise<boolean>( ()=>{} ))
+                    .mockResolvedValue(true)
+                const onHealth = jest.fn()
+                service.on('health', onHealth)
+
+                const promise = service.prepareReconnect(ai)
+                await jest.advanceTimersByTimeAsync(45000)
+                expect(onHealth).toHaveBeenCalledWith('1','red',[])
+                await jest.advanceTimersByTimeAsync(60000)
+                await promise
+            })
+
             test('isRestarting is reset when the reconnect logic throws',async ()=>{
                 const ai = createInfo('1')
                 setLastData(service, ai)
@@ -473,6 +511,23 @@ describe('DeviceRideService',()=>{
 
                 expect(ai.adapter.restart).not.toHaveBeenCalled()
                 expect(ai.isRestarting).toBeFalsy()
+            })
+        })
+
+        describe('stopHealthCheck',()=>{
+            test('only clears the last-data timestamp of the stopped adapter',()=>{
+                type Internals = { getLastDataTS: (ai:AdapterRideInfo)=>number|undefined }
+                const ai1 = createInfo('1')
+                const ai2 = createInfo('2')
+                service.startHealthCheck(ai1)
+                service.startHealthCheck(ai2)
+                const internals = service as unknown as Internals
+                expect(internals.getLastDataTS(ai2)).toBeDefined()
+
+                service.stopHealthCheck(ai1)
+
+                expect(internals.getLastDataTS(ai1)).toBeUndefined()
+                expect(internals.getLastDataTS(ai2)).toBeDefined()
             })
         })
 
