@@ -80,6 +80,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected videoPill?: VideoListPill
     protected availabilityProps?: Record<string, unknown>
     protected availabilityKey?: string
+    /** the details were not loaded when `availabilityProps` were set: they are provisional */
+    protected availabilityProvisional = false
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -401,7 +403,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     totalDistance,totalElevation,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver, cntActive:this.cntActive, country:countryISO,
-                    videoPill:this.videoPill, ...this.availabilityProps, shape:this.getRouteShapeStore().get(descr.id)}
+                    videoPill:this.videoPill, ...this.getAvailabilitySnapshotProps(), shape:this.getRouteShapeStore().get(descr.id)}
         }
         catch(err:any) {
             this.logError(err,'getDisplayProperties')
@@ -1345,7 +1347,33 @@ export class RouteCard extends BaseCard implements Card<Route> {
             return false
         this.availabilityKey = key
         this.availabilityProps = props
+        this.availabilityProvisional = !valid(this.getRouteData())
         return true
+    }
+
+    /**
+     * The availability props for a snapshot. Props that were set before the details were loaded are
+     * provisional (no source can be claimed without them): once the details are there they are
+     * recomputed from cached state, so a snapshot never carries the pre-details state.
+     */
+    protected getAvailabilitySnapshotProps(): Record<string, unknown> | undefined {
+        try {
+            if (!this.availabilityProps || !this.availabilityProvisional || !valid(this.getRouteData()))
+                return this.availabilityProps
+            const { availability, sourceLabel, unavailableReason } = this.getAvailability()
+            const fresh: Record<string, unknown> = { ...this.availabilityProps, availability }
+            delete fresh.sourceLabel
+            delete fresh.unavailableReason
+            if (sourceLabel !== undefined)
+                fresh.sourceLabel = sourceLabel
+            if (unavailableReason !== undefined)
+                fresh.unavailableReason = unavailableReason
+            return fresh
+        }
+        catch(err:any) {
+            this.logError(err,'getAvailabilitySnapshotProps')
+            return this.availabilityProps
+        }
     }
 
     /**

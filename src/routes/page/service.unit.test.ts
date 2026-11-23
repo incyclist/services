@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { Inject } from '../../base/decorators'
 import { RoutesPageService } from './service'
+import { RouteVideoResolver } from '../sharing/client/resolver'
 import { RouteCard } from '../list/cards/RouteCard'
 import { Route } from '../base/model/route'
 import { Observer } from '../../base/types/observer'
@@ -1015,6 +1016,24 @@ describe('RoutesPageService',()=>{
             const changed = s.getRoutesDisplayProps()[0]
             expect(changed).not.toBe(first)
             expect(changed).toMatchObject({ availability: 'fromLink' })
+        })
+
+        test('an unloaded non-shared route without URLs carries no unavailableReason and no sourceLabel (real resolver)', () => {
+            Inject('SharingClient', { ...sharing, getRowsForRoute: jest.fn().mockReturnValue([]) })
+            Inject('LocalLinkClient', { isSupported: () => true, getDisplayProps: () => ({ links: [] }), getSession: () => undefined })
+            const real = new RouteVideoResolver()
+            resolver.getRouteAvailability.mockImplementation((route: any, opts: any) => real.getRouteAvailability(route, opts))
+            setRoutes([item('o', { hasVideo: true })])
+            let res = s.getRoutesDisplayProps()
+            expect(res[0]).toMatchObject({ id: 'o', availability: 'remote' })
+            expect(res[0]).not.toHaveProperty('unavailableReason')
+            expect(res[0]).not.toHaveProperty('sourceLabel')
+
+            // once loaded and really without a source, it is reported
+            setRoutes([item('o', { hasVideo: true, loaded: true })])
+            res = s.getRoutesDisplayProps()
+            expect(res[0]).toMatchObject({ availability: 'unavailable', unavailableReason: 'noSource' })
+            Inject('LocalLinkClient', null)
         })
 
         describe('a computer comes or goes', () => {

@@ -346,6 +346,39 @@ describe('RouteVideoResolver', () => {
             expect(resolver.getRouteAvailability(official)).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
         })
 
+        describe('official route without a source in its summary', () => {
+            const summary: VideoSourceInput = { id: 'r1', hasVideo: true }
+
+            test('details not loaded, no link: neutral, never unavailable and no label', () => {
+                const res = resolver.getRouteAvailability(summary, { hasDetails: false })
+                expect(res).toEqual({ canStart: true, availability: 'remote' })
+                expect(resolver.getRouteAvailability(summary)).toEqual({ canStart: true, availability: 'remote' })
+            })
+
+            test('details loaded, no source at all: unavailable/noSource', () => {
+                expect(resolver.getRouteAvailability(summary, { hasDetails: true })).toEqual({ canStart: false, availability: 'unavailable', unavailableReason: 'noSource' })
+            })
+
+            test('details loaded with a remote URL: remote', () => {
+                expect(resolver.getRouteAvailability({ ...summary, videoUrl: 'https://cdn/x.mp4' }, { hasDetails: true })).toEqual({ canStart: true, availability: 'remote' })
+            })
+
+            test('details not loaded, a connected computer has it: fromLink with its name', () => {
+                link('A')
+                expect(resolver.getRouteAvailability(summary, { hasDetails: false })).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
+            })
+
+            test('details not loaded, computer offline: neutral', () => {
+                link('A', {}, false)
+                expect(resolver.getRouteAvailability(summary, { hasDetails: false })).toEqual({ canStart: true, availability: 'remote' })
+            })
+
+            test('a local copy keeps precedence', () => {
+                link('A')
+                expect(resolver.getRouteAvailability({ ...summary, isDownloaded: true, videoUrl: 'file:///data/x.mp4' }, { hasDetails: false })).toEqual({ canStart: true, availability: 'local' })
+            })
+        })
+
         test('the phone\'s own routes and routes without video are local', () => {
             expect(resolver.getRouteAvailability({ id: 'x', isLocal: true, hasVideo: true, videoUrl: 'file:///a.mp4' }).availability).toBe('local')
             expect(resolver.getRouteAvailability({ id: 'x', hasVideo: false }).availability).toBe('local')

@@ -141,7 +141,7 @@ export class RouteVideoResolver extends IncyclistService {
             const links = opts.links ?? this.getLinkSnapshot()
             if (route.linkShared)
                 return this.getLinkSharedAvailability(route, links, !!opts.hasDetails)
-            return this.getOtherAvailability(route, links)
+            return this.getOtherAvailability(route, links, !!opts.hasDetails)
         }
         catch (err) {
             this.logError(err as Error, 'getRouteAvailability')
@@ -210,9 +210,19 @@ export class RouteVideoResolver extends IncyclistService {
         }
     }
 
-    protected getOtherAvailability(route: VideoSourceInput, links: LinkSnapshot): RouteAvailability {
+    protected getOtherAvailability(route: VideoSourceInput, links: LinkSnapshot, hasDetails: boolean): RouteAvailability {
         if ((route.isDownloaded && route.videoUrl && !isRemote(route.videoUrl)) || route.isLocal || route.hasVideo === false)
             return { canStart: true, availability: 'local' }
+
+        // Without its details a route (summary only) carries no video URLs, so the lack of a source
+        // can not be told yet: stay neutral (nothing is shown) until the details are loaded.
+        if (!hasDetails && this.getRemoteUrl(route) === undefined) {
+            const linkId = this.getConnectedLinks(route.id!, [], links)[0]?.linkId
+            if (linkId)
+                return { canStart: true, availability: 'fromLink', sourceLabel: links.get(linkId)?.displayName, linkId }
+            return { canStart: true, availability: 'remote' }
+        }
+
         if (!this.isEligible(route))
             return { canStart: false, availability: 'unavailable', unavailableReason: 'noSource' }
 
