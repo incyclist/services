@@ -103,6 +103,20 @@ describe('RouteSharingClientService never throws', () => {
         await expect(service.start()).resolves.toBeUndefined()
     })
 
+    test('getSyncState returns idle', () => {
+        internals.syncStates = { get: boom }
+        expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'idle' })
+        expect(logError).toHaveBeenCalledWith(expect.any(Error), 'getSyncState')
+    })
+
+    test('a sync whose state handling fails still resolves', async () => {
+        internals.isActive = () => true
+        internals.doSync = async () => ({ linkId: 'A', status: 'synced' })
+        internals.setSyncState = boom
+        await expect(service.syncLink('A')).resolves.toEqual({ linkId: 'A', status: 'synced' })
+        expect(logError).toHaveBeenCalledWith(expect.any(Error), 'beginSync')
+    })
+
     test('getRowsForRoute returns []', () => {
         internals.repo = { getByRouteKey: boom }
         expect(service.getRowsForRoute('k')).toEqual([])

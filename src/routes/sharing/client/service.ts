@@ -16,7 +16,7 @@ import {
 import { DescriptorLoadError, getDescriptorDocument, parseDescriptor } from './descriptor'
 import { SharedRouteRepo } from './repo'
 import { SharedRouteMaterializer } from './routes'
-import type { DescriptorFailure, DescriptorTrigger, SyncOptions, SyncResult } from './types'
+import type { DescriptorFailure, DescriptorTrigger, LinkSyncState, SyncFailureReason, SyncOptions, SyncResult } from './types'
 
 type Unsubscribe = () => void
 
@@ -111,7 +111,8 @@ export const parseCatalog = (body: unknown): CatalogDocument | undefined => {
  *
  * Inert unless the link client is supported (feature toggle, bindings, native requirements).
  *
- * Emits `synced` (`SyncResult`) after every sync that ran.
+ * Emits `synced` (`SyncResult`) after every sync that ran, and `sync-state` ({@link LinkSyncState}) whenever the
+ * sync state of a computer changes (see {@link getSyncState}).
  */
 @Singleton
 export class RouteSharingClientService extends IncyclistService {
@@ -122,6 +123,7 @@ export class RouteSharingClientService extends IncyclistService {
     protected unsubscribers: Unsubscribe[] = []
     protected started = false
     protected catalogs = new Map<string, CatalogEntry[]>()
+    protected syncStates = new Map<string, LinkSyncState>()
     protected descriptorLoads = new Map<string, Promise<Route>>()
     protected materializer = new SharedRouteMaterializer({
         getList: () => this.getRouteList(),
@@ -171,6 +173,21 @@ export class RouteSharingClientService extends IncyclistService {
         catch (err) {
             this.logError(err as Error, 'getRowsForRoute')
             return []
+        }
+    }
+
+    /**
+     * Where the catalog sync of a computer stands. `idle` until a sync started; a state set by a sync
+     * stays until the next sync starts.
+     */
+    getSyncState(linkId: string): LinkSyncState {
+        try {
+            const state = this.syncStates.get(linkId)
+            return state ? { ...state } : { linkId, state: 'idle' }
+        }
+        catch (err) {
+            this.logError(err as Error, 'getSyncState')
+            return { linkId, state: 'idle' }
         }
     }
 
@@ -292,6 +309,7 @@ export class RouteSharingClientService extends IncyclistService {
     reset() {
         try {
             this.catalogs.clear()
+            this.syncStates.clear()
             this.descriptorLoads.clear()
             const unsubscribers = this.unsubscribers
             this.unsubscribers = []
@@ -358,6 +376,8 @@ export class RouteSharingClientService extends IncyclistService {
         try {
             this.catalogs.delete(linkId)
             this.unreachableAt.delete(linkId)
+            if (this.syncStates.delete(linkId))
+                this.emitSyncState({ linkId, state: 'idle' })
             this.repo.forgetLink(linkId)
                 .then(() => this.materializer.removeOrphans())
                 .catch(err => this.logError(err, 'forget'))
@@ -401,17 +421,80 @@ export class RouteSharingClientService extends IncyclistService {
         try {
             if (!opts.force && this.isRecentlyUnreachable(linkId))
                 return { linkId, status: 'unreachable' }
+            this.beginSync(linkId, opts)
             const result = await this.doSync(linkId, opts)
             if (result.status === 'unreachable')
                 this.unreachableAt.set(linkId, Date.now())
             else
                 this.unreachableAt.delete(linkId)
+            this.endSync(result)
             this.emitSynced(result)
             return result
         }
         catch (err) {
             this.logError(err as Error, 'sync')
+            this.endSync({ linkId, status: 'failed', reason: 'unreachable' })
             return { linkId, status: 'failed' }
+        }
+    }
+
+    /** A computer whose routes are already loaded stays `done` unless the sync is forced: it will most likely be `unchanged`. */
+    protected beginSync(linkId: string, opts: SyncOptions): void {
+        try {
+            if (this.syncStates.get(linkId)?.state === 'done' && !opts.force)
+                return
+            this.setSyncState({ linkId, state: 'syncing' })
+            this.logEvent({ message: 'route sharing sync started', forced: opts.force === true })
+        }
+        catch (err) {
+            this.logError(err as Error, 'beginSync')
+        }
+    }
+
+    /** Publishes the outcome of a sync. Counts and reasons only: never an address or a token. */
+    protected endSync(result: SyncResult): void {
+        try {
+            const { linkId } = result
+            if (!this.getLocalLinkClient().getDisplayProps().links.some(l => l.linkId === linkId)) {
+                this.syncStates.delete(linkId)
+                return
+            }
+            const state = this.toSyncState(result)
+            this.setSyncState(state)
+            this.logEvent({
+                message: 'route sharing sync result', status: result.status, state: state.state, reason: state.reason,
+                routes: state.routeCount, added: result.added, removed: result.removed,
+            })
+        }
+        catch (err) {
+            this.logError(err as Error, 'endSync')
+        }
+    }
+
+    protected toSyncState(result: SyncResult): LinkSyncState {
+        const { linkId, status } = result
+        if (status === 'synced')
+            return { linkId, state: 'done', routeCount: result.routeCount ?? 0 }
+        if (status === 'unchanged')
+            return { linkId, state: 'done', routeCount: this.repo.getForLink(linkId).length }
+        const reason: SyncFailureReason = result.reason ?? 'unreachable'
+        return { linkId, state: reason === 'media-unavailable' ? 'media-unavailable' : 'failed', reason }
+    }
+
+    protected setSyncState(state: LinkSyncState): void {
+        const prev = this.syncStates.get(state.linkId)
+        this.syncStates.set(state.linkId, state)
+        if (prev?.state === state.state && prev.routeCount === state.routeCount && prev.reason === state.reason)
+            return
+        this.emitSyncState(state)
+    }
+
+    protected emitSyncState(state: LinkSyncState): void {
+        try {
+            this.emit('sync-state', { ...state })
+        }
+        catch (err) {
+            this.logError(err as Error, 'emitSyncState')
         }
     }
 
@@ -432,27 +515,36 @@ export class RouteSharingClientService extends IncyclistService {
     /** Nothing is written unless the computer answered with a usable catalog. */
     protected async doSync(linkId: string, opts: SyncOptions): Promise<SyncResult> {
         const media = await withTimeout(this.getLocalLinkClient().getMedia(linkId), SYNC_TIMEOUT_MS)
-        if (media === TIMED_OUT || !media)
-            return { linkId, status: 'unreachable' }
+        if (media === TIMED_OUT)
+            return { linkId, status: 'unreachable', reason: 'timeout' }
+        if (!media)
+            return { linkId, status: 'unreachable', reason: this.isMediaUnavailable(linkId) ? 'media-unavailable' : 'unreachable' }
         if (!opts.force && media.catalogVersion && media.catalogVersion === this.getStoredVersion(linkId))
             return { linkId, status: 'unchanged' }
 
         const doc = await this.fetchCatalog(media)
+        if (doc === TIMED_OUT)
+            return { linkId, status: 'unreachable', reason: 'timeout' }
         if (doc === undefined)
-            return { linkId, status: 'unreachable' }
+            return { linkId, status: 'unreachable', reason: 'unreachable' }
         if (doc === null)
-            return { linkId, status: 'failed' }
+            return { linkId, status: 'failed', reason: 'bad-catalog' }
 
         // the computer may have been forgotten while the catalog was on its way
         if (!this.getLocalLinkClient().getDisplayProps().links.some(l => l.linkId === linkId))
-            return { linkId, status: 'failed' }
+            return { linkId, status: 'failed', reason: 'unreachable' }
 
         const { added, removed } = await this.repo.replaceForLink(linkId, doc.routes)
         await this.getLocalLinkClient().setCatalogVersion(linkId, doc.catalogVersion)
         this.logEvent({ message: 'route sharing catalog synced', routes: doc.routes.length, added, removed })
         this.catalogs.set(linkId, doc.routes)
         await this.materialize(doc.routes)
-        return { linkId, status: 'synced', added, removed }
+        return { linkId, status: 'synced', added, removed, routeCount: doc.routes.length }
+    }
+
+    /** true if this device cannot load media from a computer (as opposed to the computer not answering) */
+    protected isMediaUnavailable(linkId: string): boolean {
+        return this.getLocalLinkClient().getDisplayProps().links.find(l => l.linkId === linkId)?.mediaAvailable === false
     }
 
     /** Creates the routes of a catalog on this device; a failure here never fails the sync. */
@@ -579,10 +671,10 @@ export class RouteSharingClientService extends IncyclistService {
     }
 
     /**
-     * @returns the catalog; `undefined` if the computer did not answer; `null` if it answered with
-     * something that is not a catalog
+     * @returns the catalog; `undefined` if the computer did not answer; `TIMED_OUT` if it did not answer in
+     * time; `null` if it answered with something that is not a catalog
      */
-    protected async fetchCatalog(media: LinkMediaAccess): Promise<CatalogDocument | null | undefined> {
+    protected async fetchCatalog(media: LinkMediaAccess): Promise<CatalogDocument | null | undefined | typeof TIMED_OUT> {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), CATALOG_TIMEOUT_MS)
         let response: Response
@@ -590,8 +682,9 @@ export class RouteSharingClientService extends IncyclistService {
             response = await fetch(`${media.baseUrl}/catalog`, { headers: { Authorization: `Bearer ${media.token}` }, signal: controller.signal })
         }
         catch {
+            const timedOut = controller.signal.aborted
             clearTimeout(timer)
-            return undefined
+            return timedOut ? TIMED_OUT : undefined
         }
         try {
             if (!response.ok)

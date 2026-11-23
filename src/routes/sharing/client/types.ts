@@ -8,11 +8,33 @@ export type SyncStatus =
     | 'unreachable'   // the computer did not answer: nothing was written
     | 'failed'        // the computer answered, but not with a usable catalog: nothing was written
 
+/** Why a sync ended without writing anything. */
+export type SyncFailureReason = 'unreachable' | 'media-unavailable' | 'bad-catalog' | 'timeout'
+
 export interface SyncResult {
     linkId: string
     status: SyncStatus
     added?: number
     removed?: number
+    /** `synced`: the number of routes the computer offers */
+    routeCount?: number
+    /** set for `unreachable` and `failed` */
+    reason?: SyncFailureReason
+}
+
+/**
+ * Where the catalog sync of one computer stands, as the pairing dialog and the settings list render it.
+ * `media-unavailable`: this device cannot load media from a computer yet (e.g. Android without the loopback pipe).
+ */
+export type SyncStateName = 'idle' | 'syncing' | 'done' | 'failed' | 'media-unavailable'
+
+export interface LinkSyncState {
+    linkId: string
+    state: SyncStateName
+    /** `done`: the number of routes of the computer */
+    routeCount?: number
+    /** `failed` and `media-unavailable` */
+    reason?: SyncFailureReason
 }
 
 export interface SyncOptions {

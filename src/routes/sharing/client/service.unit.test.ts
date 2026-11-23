@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { Inject } from '../../../base/decorators'
 import type { LinkClientLink } from '../../../link/client/types'
-import { SYNC_TIMEOUT_MS } from './consts'
+import { CATALOG_TIMEOUT_MS, SYNC_TIMEOUT_MS } from './consts'
 import { SharedRouteRepo } from './repo'
 import type { SharedRouteJsonRepo } from './repo'
 import { RouteSharingClientService } from './service'
@@ -274,6 +274,130 @@ describe('RouteSharingClientService', () => {
             await service.start()
             list.emit('load-done')
             expect(fetchMock).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('getSyncState', () => {
+        const states = (): string[] => {
+            const seen: string[] = []
+            service.on('sync-state', (s: { state: string }) => seen.push(s.state))
+            return seen
+        }
+
+        test('is idle before any sync', () => {
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'idle' })
+        })
+
+        test('goes syncing, then done with the number of routes', async () => {
+            addLink('A')
+            responses.set('http://A:1', doc('a1', ['x', 'y']))
+            const seen = states()
+            await service.syncAll()
+            expect(seen).toEqual(['syncing', 'done'])
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'done', routeCount: 2 })
+        })
+
+        test('is done with the stored count when the catalog is unchanged', async () => {
+            addLink('A')
+            responses.set('http://A:1', doc('v1', ['x']))
+            await service.syncAll()
+            const seen = states()
+            await service.syncAll()
+            expect(seen).toEqual([])
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'done', routeCount: 1 })
+        })
+
+        test('is media-unavailable when this device cannot load media', async () => {
+            addLink('A', { online: false })
+            client.links[0].mediaAvailable = false
+            client.sessions.add('A')
+            const seen = states()
+            await service.syncAll()
+            expect(seen).toEqual(['syncing', 'media-unavailable'])
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'media-unavailable', reason: 'media-unavailable' })
+        })
+
+        test('is failed with unreachable when the computer does not answer', async () => {
+            addLink('A', { online: false })
+            await service.syncAll()
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'failed', reason: 'unreachable' })
+        })
+
+        test('is failed with unreachable when the catalog request fails', async () => {
+            addLink('A')
+            responses.set('http://A:1', 'down')
+            await service.syncAll()
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'failed', reason: 'unreachable' })
+        })
+
+        test('is failed with bad-catalog when the answer is not a catalog', async () => {
+            addLink('A')
+            responses.set('http://A:1', { nope: true })
+            await service.syncAll()
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'failed', reason: 'bad-catalog' })
+        })
+
+        test('is failed with timeout when the session does not come up in time', async () => {
+            addLink('A')
+            client.mediaDelay.set('A', SYNC_TIMEOUT_MS * 2)
+            const run = service.syncAll()
+            await jest.advanceTimersByTimeAsync(SYNC_TIMEOUT_MS + 100)
+            await run
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'failed', reason: 'timeout' })
+        })
+
+        test('is failed with timeout when the catalog request is not answered', async () => {
+            addLink('A')
+            responses.set('http://A:1', 'hang')
+            fetchMock.mockImplementationOnce((_url: string, init: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+                init.signal.addEventListener('abort', () => reject(new Error('aborted')))
+            }))
+            const run = service.syncAll()
+            await jest.advanceTimersByTimeAsync(CATALOG_TIMEOUT_MS + 100)
+            await run
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'failed', reason: 'timeout' })
+        })
+
+        test('a retry after a failure ends in done', async () => {
+            addLink('A')
+            responses.set('http://A:1', 'down')
+            await service.syncAll()
+            responses.set('http://A:1', doc('a1', ['x']))
+            await service.checkAgain()
+            expect(service.getSyncState('A')).toEqual({ linkId: 'A', state: 'done', routeCount: 1 })
+        })
+
+        test('forgetting a computer clears its state', async () => {
+            addLink('A')
+            responses.set('http://A:1', doc('a1', ['x']))
+            await service.start()
+            await service.syncAll()
+            client.links = []
+            client.emit('link-forgotten', 'A')
+            expect(service.getSyncState('A').state).toBe('idle')
+        })
+
+        test('a first session after pairing starts the sync', async () => {
+            addLink('A')
+            responses.set('http://A:1', doc('a1', ['x', 'y', 'z']))
+            await service.start()
+            const seen = states()
+            client.emit('session-changed', { linkId: 'A', session: { linkId: 'A' } })
+            await jest.advanceTimersByTimeAsync(10)
+            expect(seen).toEqual(['syncing', 'done'])
+            expect(service.getSyncState('A').routeCount).toBe(3)
+        })
+
+        test('logs the start and the result without addresses or tokens', async () => {
+            addLink('A')
+            responses.set('http://A:1', doc('a1', ['x']))
+            const log = jest.spyOn(service, 'logEvent')
+            await service.syncAll()
+            const lines = log.mock.calls.map(c => c[0] as Record<string, unknown>)
+            expect(lines.some(l => l.message === 'route sharing sync started')).toBe(true)
+            const result = lines.find(l => l.message === 'route sharing sync result')
+            expect(result).toMatchObject({ status: 'synced', state: 'done', routes: 1 })
+            expect(JSON.stringify(lines)).not.toMatch(/http:|tok-/)
         })
     })
 
