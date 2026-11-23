@@ -73,14 +73,21 @@ export class RouteCopyService extends IncyclistService {
         try {
             return this.getSharingClient().isActive()
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'isActive')
             return false
         }
     }
 
     /** The state of the copy of a route: `idle` unless a copy is running or the last one failed. */
     getState(routeKey: string): RouteCopyState {
-        return this.states.get(routeKey) ?? { status: 'idle' }
+        try {
+            return this.states.get(routeKey) ?? { status: 'idle' }
+        }
+        catch (err) {
+            this.logError(err as Error, 'getState')
+            return { status: 'idle' }
+        }
     }
 
     /**
@@ -89,42 +96,64 @@ export class RouteCopyService extends IncyclistService {
      * @returns the final state: `idle` if the route now has a local copy, otherwise `failed`
      */
     copyToDevice(routeKey: string): Promise<RouteCopyState> {
-        const running = this.copies.get(routeKey)
-        if (running)
-            return running.promise
+        try {
+            const running = this.copies.get(routeKey)
+            if (running)
+                return running.promise
 
-        const copy: ActiveCopy = { cancelled: false, promise: Promise.resolve({ status: 'idle' }) }
-        copy.promise = this.run(routeKey, copy)
-            .catch((err): RouteCopyState => { this.logError(scrubError(err as Error), 'copyToDevice'); return this.setFailed(routeKey, 'unknown') })
-            .finally(() => { this.copies.delete(routeKey) })
-        this.copies.set(routeKey, copy)
-        return copy.promise
+            const copy: ActiveCopy = { cancelled: false, promise: Promise.resolve({ status: 'idle' }) }
+            copy.promise = this.run(routeKey, copy)
+                .catch((err): RouteCopyState => { this.logError(scrubError(err as Error), 'copyToDevice'); return this.setFailed(routeKey, 'unknown') })
+                .finally(() => { this.copies.delete(routeKey) })
+            this.copies.set(routeKey, copy)
+            return copy.promise
+        }
+        catch (err) {
+            this.logError(scrubError(err as Error), 'copyToDevice')
+            // fallback: the copy could not be started
+            return Promise.resolve({ status: 'failed', reason: 'unknown' })
+        }
     }
 
     /** Stops a running copy and removes the partial file. The state becomes `failed` with reason `cancelled`. */
     cancel(routeKey: string): void {
-        const copy = this.copies.get(routeKey)
-        if (!copy || copy.cancelled)
-            return
-        copy.cancelled = true
-        copy.stop?.()
+        try {
+            const copy = this.copies.get(routeKey)
+            if (!copy || copy.cancelled)
+                return
+            copy.cancelled = true
+            copy.stop?.()
+        }
+        catch (err) {
+            this.logError(scrubError(err as Error), 'cancel')
+        }
     }
 
     /** Forgets a failure (the UI dismissed it). A running copy is not affected. */
     clear(routeKey: string): void {
-        if (this.copies.has(routeKey))
-            return
-        this.setState(routeKey, { status: 'idle' })
+        try {
+            if (this.copies.has(routeKey))
+                return
+            this.setState(routeKey, { status: 'idle' })
+        }
+        catch (err) {
+            this.logError(err as Error, 'clear')
+        }
     }
 
     reset() {
-        for (const copy of this.copies.values()) {
-            copy.cancelled = true
-            copy.stop?.()
+        try {
+            for (const copy of this.copies.values()) {
+                copy.cancelled = true
+                copy.stop?.()
+            }
+            this.copies.clear()
+            this.states.clear()
+            super.reset()
         }
-        this.copies.clear()
-        this.states.clear()
-        super.reset()
+        catch (err) {
+            this.logError(scrubError(err as Error), 'reset')
+        }
     }
 
     protected async run(routeKey: string, copy: ActiveCopy): Promise<RouteCopyState> {
@@ -153,13 +182,10 @@ export class RouteCopyService extends IncyclistService {
         this.setState(routeKey, { status: 'copying', progress: 0 })
 
         if (route.description.linkShared && !route.details) {
-            try {
-                await this.getSharingClient().loadDescriptor(route, 'copy')
-            }
-            catch (err) {
-                this.logEvent({ message: 'route copy failed', reason: 'details', detail: (err as { reason?: string })?.reason })
+            // never rejects: without details the route is returned unchanged (the reason is logged by the client)
+            await this.getSharingClient().loadDescriptor(route, 'copy')
+            if (!route.details)
                 return this.setFailed(routeKey, 'details')
-            }
         }
         if (copy.cancelled)
             return this.setFailed(routeKey, 'cancelled')
@@ -248,9 +274,14 @@ export class RouteCopyService extends IncyclistService {
     }
 
     protected onProgress(routeKey: string, progress: number): void {
-        if (Number.isNaN(progress) || this.getState(routeKey).status !== 'copying')
-            return
-        this.setState(routeKey, { status: 'copying', progress })
+        try {
+            if (Number.isNaN(progress) || this.getState(routeKey).status !== 'copying')
+                return
+            this.setState(routeKey, { status: 'copying', progress })
+        }
+        catch (err) {
+            this.logError(err as Error, 'onProgress')
+        }
     }
 
     /** @returns the numbers for the refusal if the video does not fit, otherwise `undefined` */
@@ -317,7 +348,13 @@ export class RouteCopyService extends IncyclistService {
             this.states.delete(routeKey)
         else
             this.states.set(routeKey, state)
-        this.emit('state-changed', { routeKey, state } satisfies RouteCopyStateEvent)
+        try {
+            this.emit('state-changed', { routeKey, state } satisfies RouteCopyStateEvent)
+        }
+        catch (err) {
+            // a listener failed: the state is set nevertheless
+            this.logError(err as Error, 'setState')
+        }
         return state
     }
 

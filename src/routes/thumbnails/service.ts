@@ -47,22 +47,34 @@ export class RouteThumbnailCacheService extends IncyclistService {
 
     /** Fetches the thumbnail and stores it. @returns the `file://` URI of the stored file, `undefined` on any failure */
     async cache(request: ThumbnailRequest): Promise<string | undefined> {
-        const keys = getKeys(request)
-        if (keys.length === 0 || !this.isAvailable())
-            return undefined
+        try {
+            const keys = getKeys(request)
+            if (keys.length === 0 || !this.isAvailable())
+                return undefined
 
-        const id = keys.join('+')
-        let run = this.inflight.get(id)
-        if (!run) {
-            run = this.fetchAndStore(request, keys).finally(() => this.inflight.delete(id))
-            this.inflight.set(id, run)
+            const id = keys.join('+')
+            let run = this.inflight.get(id)
+            if (!run) {
+                run = this.fetchAndStore(request, keys).finally(() => this.inflight.delete(id))
+                this.inflight.set(id, run)
+            }
+            return await run
         }
-        return await run
+        catch (err) {
+            this.logError(err as Error, 'cache')
+            return undefined
+        }
     }
 
     /** Cached file if there is one, otherwise a fetch. */
     async resolve(request: ThumbnailRequest): Promise<string | undefined> {
-        return await this.getCached(request) ?? await this.cache(request)
+        try {
+            return await this.getCached(request) ?? await this.cache(request)
+        }
+        catch (err) {
+            this.logError(err as Error, 'resolve')
+            return undefined
+        }
     }
 
     /** Removes a cached file that turned out to be unusable (e.g. a partial write), so it is fetched again. */

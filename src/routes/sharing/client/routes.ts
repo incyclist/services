@@ -11,7 +11,7 @@ export interface MaterializerRouteList {
     getSelected(): Route | undefined
     addRoutes(routes: Route[], source: 'system'): void
     saveRoute(route: Route): Promise<void>
-    removeSharedRoute(route: Route): Promise<void>
+    removeSharedRoute(route: Route): Promise<boolean | void>
 }
 
 export interface MaterializerDeps {
@@ -89,8 +89,8 @@ export class SharedRouteMaterializer {
         let removed = 0
         for (const route of orphans) {
             try {
-                await list.removeSharedRoute(route)
-                removed++
+                if (await list.removeSharedRoute(route) !== false)
+                    removed++
             }
             catch (err) {
                 this.deps.logError(err as Error, 'removeOrphans')

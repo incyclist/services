@@ -70,15 +70,30 @@ export class RouteSharingService extends IncyclistService {
 
     /** Stops watching. The transport drops the published state itself when it stops. */
     stop(): void {
-        this.started = false
-        clearTimeout(this.refreshTimer)
-        this.unsubscribers.forEach(u => u())
-        this.unsubscribers = []
-        this.catalog = undefined
-        clearTimeout(this.descriptorTimer)
-        this.descriptorTimer = undefined
-        this.descriptorDocs.clear()
-        this.outstanding.clear()
+        try {
+            this.started = false
+            clearTimeout(this.refreshTimer)
+            const unsubscribers = this.unsubscribers
+            this.unsubscribers = []
+            this.catalog = undefined
+            clearTimeout(this.descriptorTimer)
+            this.descriptorTimer = undefined
+            this.descriptorDocs.clear()
+            this.outstanding.clear()
+            unsubscribers.forEach(u => this.unsubscribeSafely(u))
+        }
+        catch (err) {
+            this.logError(err as Error, 'stop')
+        }
+    }
+
+    protected unsubscribeSafely(unsubscribe: Unsubscribe): void {
+        try {
+            unsubscribe()
+        }
+        catch (err) {
+            this.logError(err as Error, 'unsubscribe')
+        }
     }
 
     /**
@@ -87,18 +102,33 @@ export class RouteSharingService extends IncyclistService {
      * @returns false if the transport rejected the publication
      */
     async setTokens(tokens: MediaState['tokens']): Promise<boolean> {
-        this.tokens = tokens.map(t => ({ ...t }))
-        return this.started ? await this.publish() : true
+        try {
+            this.tokens = tokens.map(t => ({ ...t }))
+            return this.started ? await this.publish() : true
+        }
+        catch (err) {
+            this.logError(err as Error, 'setTokens')
+            return false
+        }
     }
 
     /** Rebuilds the catalog from the route list and republishes it. */
     refresh(): Promise<void> {
-        if (this.refreshing) {
-            this.refreshAgain = true
+        try {
+            if (this.refreshing) {
+                this.refreshAgain = true
+                return this.refreshing
+            }
+            // concurrent callers share one run; the run never rejects
+            this.refreshing = this.runRefresh()
+                .catch(err => this.logError(err as Error, 'refresh'))
+                .finally(() => { this.refreshing = undefined })
             return this.refreshing
         }
-        this.refreshing = this.runRefresh().finally(() => { this.refreshing = undefined })
-        return this.refreshing
+        catch (err) {
+            this.logError(err as Error, 'refresh')
+            return Promise.resolve()
+        }
     }
 
     /**
@@ -113,6 +143,17 @@ export class RouteSharingService extends IncyclistService {
      * @param connectionId the control connection that asks
      */
     async getDescriptor(routeKey: string, connectionId: string): Promise<RouteDescriptorResponseBody> {
+        try {
+            return await this.doGetDescriptor(routeKey, connectionId)
+        }
+        catch (err) {
+            this.logError(err as Error, 'getDescriptor')
+            // fallback: the phone is told that no details are available
+            return { routeKey: typeof routeKey === 'string' ? routeKey : '', error: 'no-details' }
+        }
+    }
+
+    protected async doGetDescriptor(routeKey: string, connectionId: string): Promise<RouteDescriptorResponseBody> {
         const startedAt = Date.now()
         if (this.outstanding.has(connectionId))
             return this.descriptorFailed(routeKey, 'busy')
@@ -160,16 +201,33 @@ export class RouteSharingService extends IncyclistService {
     }
 
     getCatalogVersion(): string {
-        return this.catalog?.document.catalogVersion ?? ''
+        try {
+            return this.catalog?.document.catalogVersion ?? ''
+        }
+        catch (err) {
+            this.logError(err as Error, 'getCatalogVersion')
+            return ''
+        }
     }
 
     getRouteCount(): number {
-        return this.catalog?.document.routes.length ?? 0
+        try {
+            return this.catalog?.document.routes.length ?? 0
+        }
+        catch (err) {
+            this.logError(err as Error, 'getRouteCount')
+            return 0
+        }
     }
 
     reset() {
-        this.stop()
-        super.reset()
+        try {
+            this.stop()
+            super.reset()
+        }
+        catch (err) {
+            this.logError(err as Error, 'reset')
+        }
     }
 
     protected descriptorFailed(routeKey: string, error: RouteDescriptorError): RouteDescriptorResponseBody {
@@ -237,9 +295,14 @@ export class RouteSharingService extends IncyclistService {
     }
 
     protected onDescriptorExpiry(): void {
-        if (this.dropExpiredDescriptors() && this.started)
-            this.publish().catch(err => this.logError(err, 'descriptorExpiry'))
-        this.scheduleDescriptorExpiry()
+        try {
+            if (this.dropExpiredDescriptors() && this.started)
+                this.publish().catch(err => this.logError(err, 'descriptorExpiry'))
+            this.scheduleDescriptorExpiry()
+        }
+        catch (err) {
+            this.logError(err as Error, 'descriptorExpiry')
+        }
     }
 
     protected async runRefresh(): Promise<void> {
@@ -320,8 +383,13 @@ export class RouteSharingService extends IncyclistService {
         const list = this.getRouteList()
         const onChange = () => this.scheduleRefresh()
         const onOpened = (observer) => {
-            observer?.on('loaded', onChange)
-            observer?.on('updated', onChange)
+            try {
+                observer?.on('loaded', onChange)
+                observer?.on('updated', onChange)
+            }
+            catch (err) {
+                this.logError(err as Error, 'onOpened')
+            }
         }
         list.on('load-done', onChange)
         list.on('opened', onOpened)
@@ -334,10 +402,15 @@ export class RouteSharingService extends IncyclistService {
     }
 
     protected scheduleRefresh(): void {
-        clearTimeout(this.refreshTimer)
-        this.refreshTimer = setTimeout(() => {
-            this.refresh().catch(err => this.logError(err, 'refresh'))
-        }, REFRESH_DEBOUNCE_MS)
+        try {
+            clearTimeout(this.refreshTimer)
+            this.refreshTimer = setTimeout(() => {
+                this.refresh().catch(err => this.logError(err, 'refresh'))
+            }, REFRESH_DEBOUNCE_MS)
+        }
+        catch (err) {
+            this.logError(err as Error, 'scheduleRefresh')
+        }
     }
 
     @Injectable

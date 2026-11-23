@@ -274,7 +274,7 @@ describe('RouteCopyService', () => {
         test('loads the details of a route that came from a computer before any video byte is pulled', async () => {
             route = { description: { id: 'r1', linkShared: true } }
             const order: string[] = []
-            sharing.loadDescriptor.mockImplementation(async () => { order.push('details') })
+            sharing.loadDescriptor.mockImplementation(async () => { order.push('details'); route.details = {} })
             ;(bindings.downloadManager as { createSession: jest.Mock }).createSession.mockImplementation((url: string, file: string) => {
                 order.push('session')
                 const s = new FakeSession(url, file); sessions.push(s); return s
@@ -289,7 +289,7 @@ describe('RouteCopyService', () => {
 
         test('fails without pulling anything if the details can not be loaded', async () => {
             route = { description: { id: 'r1', linkShared: true } }
-            sharing.loadDescriptor.mockRejectedValue(new Error('x'))
+            sharing.loadDescriptor.mockResolvedValue(route)
             expect(await service.copyToDevice('r1')).toEqual({ status: 'failed', reason: 'details' })
             expect(sessions).toHaveLength(0)
         })

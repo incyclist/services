@@ -153,7 +153,16 @@ describe('RouteSharingClientService.loadDescriptor', () => {
         jest.clearAllMocks()
     })
 
-    const failure = async (p: Promise<unknown>) => { try { await p } catch (err) { return err as DescriptorLoadError } }
+    // loadDescriptor never rejects: a failure leaves the details absent and is logged with its reason
+    const failure = async (p: Promise<Route>): Promise<{ reason?: string, httpStatus?: number } | undefined> => {
+        const logEvent = jest.spyOn(service as unknown as { logEvent: (e: unknown) => void }, 'logEvent')
+        const res = await p
+        expect(res.details).toBeUndefined()
+        const event = logEvent.mock.calls.map(c => c[0] as { message: string, reason?: string, httpStatus?: number })
+            .find(e => e.message === 'route descriptor failed')
+        logEvent.mockRestore()
+        return event
+    }
 
     test('loads, verifies and persists the details; a second call makes no request', async () => {
         const res = await service.loadDescriptor(route, 'details')
@@ -241,8 +250,13 @@ describe('RouteSharingClientService.loadDescriptor', () => {
         expect((await failure(service.loadDescriptor(route, 'details')))?.reason).toBe('unknown-route')
     })
 
-    test('a request that times out is reported as timeout', async () => {
-        request.mockRejectedValueOnce(Object.assign(new Error('timeout'), { code: 'timeout' }))
-        expect((await failure(service.loadDescriptor(route, 'details')))?.reason).toBe('timeout')
+    test('a request that gets no answer is reported as unreachable', async () => {
+        request.mockResolvedValueOnce(undefined)
+        expect((await failure(service.loadDescriptor(route, 'details')))?.reason).toBe('unreachable')
+    })
+
+    test('a request that throws does not reject', async () => {
+        request.mockRejectedValueOnce(new Error('boom'))
+        expect((await failure(service.loadDescriptor(route, 'details')))?.reason).toBe('unreachable')
     })
 })

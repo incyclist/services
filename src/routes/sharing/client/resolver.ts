@@ -52,7 +52,8 @@ export class RouteVideoResolver extends IncyclistService {
         try {
             return this.getLocalLinkClient().isSupported()
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'isAvailable')
             return false
         }
     }
@@ -63,7 +64,13 @@ export class RouteVideoResolver extends IncyclistService {
      * from a computer)
      */
     isEligible(route: VideoSourceInput): boolean {
-        return !!route?.linkShared || (!route?.isLocal && this.getRemoteUrl(route) !== undefined)
+        try {
+            return !!route?.linkShared || (!route?.isLocal && this.getRemoteUrl(route) !== undefined)
+        }
+        catch (err) {
+            this.logError(err as Error, 'isEligible')
+            return false
+        }
     }
 
     /**
@@ -91,8 +98,7 @@ export class RouteVideoResolver extends IncyclistService {
         }
         catch (err) {
             this.logError(err as Error, 'resolve')
-            const remote = this.getRemoteUrl(route)
-            return remote ? { source: 'remote', url: remote } : { source: 'unavailable' }
+            return this.resolveFallback(route)
         }
     }
 
@@ -101,18 +107,24 @@ export class RouteVideoResolver extends IncyclistService {
      * no file is checked. A connected computer that has the route counts as available.
      */
     getAvailability(route: VideoSourceInput): VideoAvailability {
-        if (route?.linkShared) {
-            const { canStart, availability, linkId } = this.getRouteAvailability(route, { hasDetails: true })
-            return { canStart, availability, linkId }
+        try {
+            if (route?.linkShared) {
+                const { canStart, availability, linkId } = this.getRouteAvailability(route, { hasDetails: true })
+                return { canStart, availability, linkId }
+            }
+            if (!this.isEligible(route))
+                return { canStart: false, availability: 'unavailable' }
+            if ((route.isDownloaded) && route.videoUrl && !isRemote(route.videoUrl))
+                return { canStart: true, availability: 'local' }
+            const linkId = this.getConnectedLinks(route.id!, [])[0]?.linkId
+            if (linkId)
+                return { canStart: true, availability: 'fromLink', linkId }
+            return { canStart: true, availability: 'remote' }
         }
-        if (!this.isEligible(route))
+        catch (err) {
+            this.logError(err as Error, 'getAvailability')
             return { canStart: false, availability: 'unavailable' }
-        if ((route.isDownloaded) && route.videoUrl && !isRemote(route.videoUrl))
-            return { canStart: true, availability: 'local' }
-        const linkId = this.getConnectedLinks(route.id!, [])[0]?.linkId
-        if (linkId)
-            return { canStart: true, availability: 'fromLink', linkId }
-        return { canStart: true, availability: 'remote' }
+        }
     }
 
     /**
@@ -140,15 +152,22 @@ export class RouteVideoResolver extends IncyclistService {
     /** The state of the computers that availability needs; read it once for a whole list. */
     getLinkSnapshot(): LinkSnapshot {
         const snapshot: LinkSnapshot = new Map()
-        const client = this.getLocalLinkClient()
-        if (!client.isSupported())
-            return snapshot
-        for (const link of client.getDisplayProps().links) {
-            const session = client.getSession(link.linkId)
-            snapshot.set(link.linkId, {
-                displayName: link.displayName, connected: session !== undefined, descriptor: !!session?.capabilities?.includes('route-descriptor'),
-                mediaAvailable: link.mediaAvailable, lastSeenAt: link.lastSeenAt ?? 0, reachability: link.reachability,
-            })
+        try {
+            const client = this.getLocalLinkClient()
+            if (!client.isSupported())
+                return snapshot
+            for (const link of client.getDisplayProps().links) {
+                const session = client.getSession(link.linkId)
+                snapshot.set(link.linkId, {
+                    displayName: link.displayName, connected: session !== undefined, descriptor: !!session?.capabilities?.includes('route-descriptor'),
+                    mediaAvailable: link.mediaAvailable, lastSeenAt: link.lastSeenAt ?? 0, reachability: link.reachability,
+                })
+            }
+        }
+        catch (err) {
+            this.logError(err as Error, 'getLinkSnapshot')
+            // fallback: no computer is known
+            snapshot.clear()
         }
         return snapshot
     }
@@ -164,7 +183,8 @@ export class RouteVideoResolver extends IncyclistService {
             const row = rows.find(r => r.linkId === preferLinkId) ?? rows.sort((a, b) => b.lastConfirmedAt - a.lastConfirmedAt)[0]
             return row ? { linkId: row.linkId, thumbHandle: row.thumbHandle! } : undefined
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'getThumbnailLink')
             return undefined
         }
     }
@@ -174,8 +194,19 @@ export class RouteVideoResolver extends IncyclistService {
         try {
             return this.getAvailability(route).availability === 'fromLink'
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'hasLinkSource')
             return false
+        }
+    }
+
+    protected resolveFallback(route: VideoSourceInput): ResolvedVideo {
+        try {
+            const remote = this.getRemoteUrl(route)
+            return remote ? { source: 'remote', url: remote } : { source: 'unavailable' }
+        }
+        catch {
+            return { source: 'unavailable' }
         }
     }
 
@@ -279,6 +310,16 @@ export class RouteVideoResolver extends IncyclistService {
      * status) or `gone` (`410`)
      */
     async openRow(row: SharedRouteEntry): Promise<OpenRowResult> {
+        try {
+            return await this.doOpenRow(row)
+        }
+        catch (err) {
+            this.logError(err as Error, 'openRow')
+            return { failure: 'unreachable' }
+        }
+    }
+
+    protected async doOpenRow(row: SharedRouteEntry): Promise<OpenRowResult> {
         const media = await this.getLocalLinkClient().getMedia(row.linkId)
         if (!media) {
             this.unreachableAt.set(row.linkId, Date.now())

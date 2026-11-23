@@ -136,10 +136,10 @@ export class RouteSharingClientService extends IncyclistService {
 
     /** Loads the persisted rows and subscribes to the triggers. Does no network access. */
     async start(): Promise<void> {
-        if (this.started || !this.isActive())
-            return
-        this.started = true
         try {
+            if (this.started || !this.isActive())
+                return
+            this.started = true
             await this.repo.load()
             this.subscribe()
         }
@@ -153,7 +153,8 @@ export class RouteSharingClientService extends IncyclistService {
         try {
             return this.getLocalLinkClient().isSupported()
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'isActive')
             return false
         }
     }
@@ -164,26 +165,44 @@ export class RouteSharingClientService extends IncyclistService {
 
     /** The persisted rows of every computer that has the route. */
     getRowsForRoute(routeKey: string): SharedRouteEntry[] {
-        return this.repo.getByRouteKey(routeKey)
+        try {
+            return this.repo.getByRouteKey(routeKey)
+        }
+        catch (err) {
+            this.logError(err as Error, 'getRowsForRoute')
+            return []
+        }
     }
 
     /** Syncs every paired computer, each independently. */
     async syncAll(opts: SyncOptions = {}): Promise<SyncResult[]> {
-        if (!this.isActive())
+        try {
+            if (!this.isActive())
+                return []
+            await this.repo.load()
+            const links = this.getLocalLinkClient().getDisplayProps().links
+            const results = await Promise.allSettled(links.map(l => this.syncLink(l.linkId, opts)))
+            return results.map((r, i) => r.status === 'fulfilled' ? r.value : { linkId: links[i].linkId, status: 'failed' as const })
+        }
+        catch (err) {
+            this.logError(err as Error, 'syncAll')
             return []
-        await this.repo.load()
-        const links = this.getLocalLinkClient().getDisplayProps().links
-        const results = await Promise.allSettled(links.map(l => this.syncLink(l.linkId, opts)))
-        return results.map((r, i) => r.status === 'fulfilled' ? r.value : { linkId: links[i].linkId, status: 'failed' as const })
+        }
     }
 
     /** "Check again": re-checks the saved address of every computer and syncs those that answer. */
     async checkAgain(): Promise<SyncResult[]> {
-        if (!this.isActive())
+        try {
+            if (!this.isActive())
+                return []
+            this.unreachableAt.clear()
+            await this.getLocalLinkClient().check({ manual: true })
+            return await this.syncAll({ force: true })
+        }
+        catch (err) {
+            this.logError(err as Error, 'checkAgain')
             return []
-        this.unreachableAt.clear()
-        await this.getLocalLinkClient().check({ manual: true })
-        return await this.syncAll({ force: true })
+        }
     }
 
     /**
@@ -191,14 +210,21 @@ export class RouteSharingClientService extends IncyclistService {
      * running one runs again (the running one may have started before the reason for it).
      */
     syncLink(linkId: string, opts: SyncOptions = {}): Promise<SyncResult> {
-        const running = this.running.get(linkId)
-        if (running && !opts.force)
-            return running
-        const run = (running ? running.catch(() => undefined) : Promise.resolve())
-            .then(() => this.runSync(linkId, opts))
-            .finally(() => { if (this.running.get(linkId) === run) this.running.delete(linkId) })
-        this.running.set(linkId, run)
-        return run
+        try {
+            const running = this.running.get(linkId)
+            if (running && !opts.force)
+                return running
+            // runSync never rejects
+            const run = (running ? running.catch(() => undefined) : Promise.resolve())
+                .then(() => this.runSync(linkId, opts))
+                .finally(() => { if (this.running.get(linkId) === run) this.running.delete(linkId) })
+            this.running.set(linkId, run)
+            return run
+        }
+        catch (err) {
+            this.logError(err as Error, 'syncLink')
+            return Promise.resolve({ linkId, status: 'failed' })
+        }
     }
 
     /**
@@ -209,17 +235,28 @@ export class RouteSharingClientService extends IncyclistService {
      * the computer does not answer or this was already tried
      */
     async onStaleHandle(linkId: string, routeKey: string): Promise<SharedRouteEntry | undefined> {
-        const key = `${linkId}:${routeKey}`
-        if (this.staleResynced.has(key) || !this.getLocalLinkClient().getSession(linkId))
+        try {
+            const key = `${linkId}:${routeKey}`
+            if (this.staleResynced.has(key) || !this.getLocalLinkClient().getSession(linkId))
+                return undefined
+            this.staleResynced.add(key)
+            const result = await this.syncLink(linkId, { force: true })
+            return result.status === 'synced' ? this.repo.getRow(linkId, routeKey) : undefined
+        }
+        catch (err) {
+            this.logError(err as Error, 'onStaleHandle')
             return undefined
-        this.staleResynced.add(key)
-        const result = await this.syncLink(linkId, { force: true })
-        return result.status === 'synced' ? this.repo.getRow(linkId, routeKey) : undefined
+        }
     }
 
     /** A handle answered `410`: the file is gone on that computer. Counts a miss; the row stays. */
     async onGone(linkId: string, routeKey: string): Promise<void> {
-        await this.repo.recordGone(linkId, routeKey)
+        try {
+            await this.repo.recordGone(linkId, routeKey)
+        }
+        catch (err) {
+            this.logError(err as Error, 'onGone')
+        }
     }
 
     /**
@@ -229,30 +266,54 @@ export class RouteSharingClientService extends IncyclistService {
      *
      * @param route the route as it is in the route list; its details are set
      * @param trigger what needs the details
-     * @throws DescriptorLoadError if no computer could provide verified details; nothing is persisted then
+     * @returns the route; if no computer could provide verified details, `details` is still absent and
+     * nothing was persisted (the reason is logged)
      */
     loadDescriptor(route: Route, trigger: DescriptorTrigger): Promise<Route> {
-        if (route.details)
-            return Promise.resolve(route)
-        const routeKey = route.description.id!
-        let load = this.descriptorLoads.get(routeKey)
-        if (!load) {
-            load = this.doLoadDescriptor(route, trigger).finally(() => { this.descriptorLoads.delete(routeKey) })
-            this.descriptorLoads.set(routeKey, load)
+        try {
+            if (route.details)
+                return Promise.resolve(route)
+            const routeKey = route.description.id!
+            let load = this.descriptorLoads.get(routeKey)
+            if (!load) {
+                load = this.doLoadDescriptor(route, trigger)
+                    .catch(() => route)
+                    .finally(() => { this.descriptorLoads.delete(routeKey) })
+                this.descriptorLoads.set(routeKey, load)
+            }
+            return load
         }
-        return load
+        catch (err) {
+            this.logError(err as Error, 'loadDescriptor')
+            return Promise.resolve(route)
+        }
     }
 
     reset() {
-        this.catalogs.clear()
-        this.descriptorLoads.clear()
-        this.unsubscribers.forEach(u => u())
-        this.unsubscribers = []
-        this.started = false
-        this.running.clear()
-        this.unreachableAt.clear()
-        this.staleResynced.clear()
-        super.reset()
+        try {
+            this.catalogs.clear()
+            this.descriptorLoads.clear()
+            const unsubscribers = this.unsubscribers
+            this.unsubscribers = []
+            unsubscribers.forEach(u => this.unsubscribeSafely(u))
+            this.started = false
+            this.running.clear()
+            this.unreachableAt.clear()
+            this.staleResynced.clear()
+            super.reset()
+        }
+        catch (err) {
+            this.logError(err as Error, 'reset')
+        }
+    }
+
+    protected unsubscribeSafely(unsubscribe: Unsubscribe): void {
+        try {
+            unsubscribe()
+        }
+        catch (err) {
+            this.logError(err as Error, 'unsubscribe')
+        }
     }
 
     protected subscribe(): void {
@@ -267,28 +328,43 @@ export class RouteSharingClientService extends IncyclistService {
 
         const list = this.getRouteList()
         const onLoaded = () => {
-            this.materializeCached().catch(err => this.logError(err, 'materialize'))
-            this.syncAll().catch(err => this.logError(err, 'preload'))
+            try {
+                this.materializeCached().catch(err => this.logError(err, 'materialize'))
+                this.syncAll().catch(err => this.logError(err, 'preload'))
+            }
+            catch (err) {
+                this.logError(err as Error, 'preload')
+            }
         }
         list.on('load-done', onLoaded)
         this.unsubscribers.push(() => list.off('load-done', onLoaded))
     }
 
     protected onSessionChanged(e: { linkId: string, session?: LinkClientSession }): void {
-        if (!e.session)
-            return
-        this.unreachableAt.delete(e.linkId)
-        for (const key of [...this.staleResynced].filter(k => k.startsWith(`${e.linkId}:`)))
-            this.staleResynced.delete(key)
-        this.syncLink(e.linkId).catch(err => this.logError(err, 'session'))
+        try {
+            if (!e.session)
+                return
+            this.unreachableAt.delete(e.linkId)
+            for (const key of [...this.staleResynced].filter(k => k.startsWith(`${e.linkId}:`)))
+                this.staleResynced.delete(key)
+            this.syncLink(e.linkId).catch(err => this.logError(err, 'session'))
+        }
+        catch (err) {
+            this.logError(err as Error, 'onSessionChanged')
+        }
     }
 
     protected onLinkForgotten(linkId: string): void {
-        this.catalogs.delete(linkId)
-        this.unreachableAt.delete(linkId)
-        this.repo.forgetLink(linkId)
-            .then(() => this.materializer.removeOrphans())
-            .catch(err => this.logError(err, 'forget'))
+        try {
+            this.catalogs.delete(linkId)
+            this.unreachableAt.delete(linkId)
+            this.repo.forgetLink(linkId)
+                .then(() => this.materializer.removeOrphans())
+                .catch(err => this.logError(err, 'forget'))
+        }
+        catch (err) {
+            this.logError(err as Error, 'onLinkForgotten')
+        }
     }
 
     /** Materialises the catalogs that arrived before the route list was loaded. */
@@ -302,14 +378,19 @@ export class RouteSharingClientService extends IncyclistService {
      * version. A push for the version we already hold causes no sync.
      */
     protected onPush(e: { linkId: string, message?: LinkServerMessage }): void {
-        const message = e?.message
-        if (message?.t !== CATALOG_CHANGED_MESSAGE)
-            return
-        const known = this.getStoredVersion(e.linkId)
-        const announced = message.b?.catalogVersion
-        if (announced !== undefined && announced === known)
-            return
-        this.syncLink(e.linkId, { force: true }).catch(err => this.logError(err, 'push'))
+        try {
+            const message = e?.message
+            if (message?.t !== CATALOG_CHANGED_MESSAGE)
+                return
+            const known = this.getStoredVersion(e.linkId)
+            const announced = message.b?.catalogVersion
+            if (announced !== undefined && announced === known)
+                return
+            this.syncLink(e.linkId, { force: true }).catch(err => this.logError(err, 'push'))
+        }
+        catch (err) {
+            this.logError(err as Error, 'onPush')
+        }
     }
 
     protected getStoredVersion(linkId: string): string | undefined {
@@ -325,12 +406,21 @@ export class RouteSharingClientService extends IncyclistService {
                 this.unreachableAt.set(linkId, Date.now())
             else
                 this.unreachableAt.delete(linkId)
-            this.emit('synced', result)
+            this.emitSynced(result)
             return result
         }
         catch (err) {
             this.logError(err as Error, 'sync')
             return { linkId, status: 'failed' }
+        }
+    }
+
+    protected emitSynced(result: SyncResult): void {
+        try {
+            this.emit('synced', result)
+        }
+        catch (err) {
+            this.logError(err as Error, 'emitSynced')
         }
     }
 
@@ -450,6 +540,7 @@ export class RouteSharingClientService extends IncyclistService {
 
     protected async sendDescriptorRequest(linkId: string, routeKey: string) {
         try {
+            // `request` resolves with `undefined` if there is no session, no answer in time or the session ended
             const reply = await this.getLocalLinkClient().request(linkId, 'route-descriptor', { routeKey }, DESCRIPTOR_REQUEST_TIMEOUT_MS)
             if (!reply)
                 throw new DescriptorLoadError('unreachable')
@@ -458,7 +549,7 @@ export class RouteSharingClientService extends IncyclistService {
         catch (err) {
             if (err instanceof DescriptorLoadError)
                 throw err
-            throw new DescriptorLoadError((err as { code?: string })?.code === 'timeout' ? 'timeout' : 'unreachable')
+            throw new DescriptorLoadError('unreachable')
         }
     }
 
