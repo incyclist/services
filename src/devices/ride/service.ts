@@ -18,6 +18,13 @@ import { getPairingStartTimeout, DEVICE_RETRY_STOP_TIMEOUT_MS } from "./timeouts
 
 const NO_DATA_THRESHOLD = 10000
 const UNHEALTHY_THRESHOLD = 60000
+const RESTART_TIMEOUT = 45000
+
+// The BLE peripheral scan is of no use while a ride is running: devices are connected already and a
+// reconnect re-uses their announcement. Probing/scanning only adds load and, on some stacks, can
+// stall the connections of the devices in use.
+const RIDE_SCAN_PAUSE_REASON = 'ride'
+const RIDE_SCAN_PAUSE_INTERFACES = ['ble']
 
 type DuplicateInfo = {
     udid: string;
@@ -61,6 +68,7 @@ export class DeviceRideService  extends IncyclistService{
     protected modeReplacedHandlers = new WeakMap<IncyclistDeviceAdapter,(info:ModeReplacedInfo)=>void>()
     protected lazyInitDone: boolean
     protected lastDataInfo: Record<string,number> = {}
+    protected scanPausedForRide = false
     protected reconnectBusy: boolean
     protected prevUpdate: UpdateRequest
     protected logPaused: boolean = false
@@ -694,6 +702,7 @@ export class DeviceRideService  extends IncyclistService{
 
             if (allOK && (startType==='start' )) {
                 this.registerOnDataHandler( adapters)
+                this.pauseScanForRide(adapters.length)
             }
 
             return allOK;
@@ -1021,8 +1030,10 @@ export class DeviceRideService  extends IncyclistService{
             delete ai.ivToCheck
             delete ai.isHealthy
             this.healthChecks.delete(ai)
+            // removeOnDatahandler() clears the timestamp of this adapter only. Resetting the timestamps of all
+            // adapters would restart the no-data clock of every other device, delaying the detection of
+            // a second failed device
             this.removeOnDatahandler(ai)
-            this.lastDataInfo = {}
         }
         
     }
@@ -1230,6 +1241,37 @@ export class DeviceRideService  extends IncyclistService{
         unhealthy.isRestarting = false;
 
     }
+    // A restart that never settles (stalled BLE stack) must not block the retry loop in reconnectSingle()
+    // forever: it would leave the device without any further recovery attempt or log entry
+    private async restartWithTimeout(unhealthy: AdapterRideInfo): Promise<boolean> {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const timeout = new Promise<boolean>( resolve => {
+            timer = setTimeout( ()=>{
+                this.logEvent({message:'restart adapter timeout', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, timeoutMs:RESTART_TIMEOUT})
+                this.markDeviceUnrecovered(unhealthy)
+                resolve(false)
+            }, RESTART_TIMEOUT)
+        })
+
+        try {
+            return await Promise.race([unhealthy.adapter.restart(), timeout])
+        }
+        finally {
+            clearTimeout(timer)
+        }
+    }
+
+    // The health check is stopped while a device is restarted, so its status would otherwise stay on
+    // "amber" for as long as the restart keeps failing - without telling the user that data is lost
+    private markDeviceUnrecovered(ai: AdapterRideInfo) {
+        if (ai.dataStatus==='red')
+            return
+        ai.dataStatus = 'red'
+        const {enabledCapabilities} = this.getEnabledCapabilities(ai)
+        this.emit('health',ai.udid, ai.dataStatus, enabledCapabilities)
+        this.logEvent({message:'device health status changed', device:ai.adapter.getUniqueName(), udid:ai.udid, healthState:ai.dataStatus })
+    }
+
     private async reconnectSingle(unhealthy: AdapterRideInfo) {
         unhealthy.isRestarting = true;
 
@@ -1244,11 +1286,10 @@ export class DeviceRideService  extends IncyclistService{
 
         let success = false;
         do {
-            this.logEvent({ message: 'restart adapter', device: unhealthy.udid });
+            this.logEvent({ message: 'restart adapter', device: unhealthy.adapter.getUniqueName(), udid: unhealthy.udid });
             
-            const adapter = unhealthy.adapter;
             try {
-                const started = await adapter.restart();
+                const started = await this.restartWithTimeout(unhealthy);
                 if (started) {
                     this.logEvent({message:'device healthy', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid })                
                     unhealthy.tsLastData = Date.now()
@@ -1256,7 +1297,7 @@ export class DeviceRideService  extends IncyclistService{
                 }
             }
             catch (err) {
-                this.logEvent({ message: 'restart adapter failed', device: unhealthy.udid, reason: err.message });
+                this.logEvent({ message: 'restart adapter failed', device: unhealthy.adapter.getUniqueName(), udid: unhealthy.udid, reason: err.message });
             }
 
             if (success) {
@@ -1279,6 +1320,12 @@ export class DeviceRideService  extends IncyclistService{
 
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
         await this.lazyInit();
+
+        // a ride that ended without stop() would leave the scan suspended: report and repair
+        if (this.scanPausedForRide) {
+            this.logEvent({message:'ride scan pause leaked'})
+            this.resumeScanAfterRide('start')
+        }
 
         // getSelectedAdapters will cache data in this.rideAdapters. Therefore we need t
         this.cleanInternalCache()
@@ -1433,7 +1480,38 @@ export class DeviceRideService  extends IncyclistService{
         })
     }
 
+    protected pauseScanForRide(udidCount:number) {
+        if (this.scanPausedForRide)
+            return
+        this.scanPausedForRide = true
+        this.logEvent({message:'ride background scan paused', udidCount})
+        // the scan is an optimisation: a failure here must never affect the ride
+        try {
+            this.getDeviceAccess().pauseBackgroundActivity(RIDE_SCAN_PAUSE_REASON, RIDE_SCAN_PAUSE_INTERFACES)
+                ?.catch( err=> { this.logError(err,'pauseScanForRide') })
+        }
+        catch(err) {
+            this.logError(err,'pauseScanForRide')
+        }
+    }
+
+    protected resumeScanAfterRide(exitPath:'stop'|'cancelStart'|'dropPendingStart'|'start') {
+        if (!this.scanPausedForRide)
+            return
+        this.scanPausedForRide = false
+        this.logEvent({message:'ride background scan resumed', exitPath})
+        try {
+            this.getDeviceAccess().resumeBackgroundActivity(RIDE_SCAN_PAUSE_REASON, RIDE_SCAN_PAUSE_INTERFACES)
+                ?.catch( err=> { this.logError(err,'resumeScanAfterRide') })
+        }
+        catch(err) {
+            this.logError(err,'resumeScanAfterRide')
+        }
+    }
+
     async cancelStart():Promise<boolean> {
+
+        this.resumeScanAfterRide('cancelStart')
 
         if (!this.startPromises && this.retryPromises.size===0)
             return;
@@ -1479,6 +1557,8 @@ export class DeviceRideService  extends IncyclistService{
      * wait for it.
      */
     dropPendingStart():void {
+        this.resumeScanAfterRide('dropPendingStart')
+
         if (!this.startPromises)
             return
 
@@ -1516,6 +1596,10 @@ export class DeviceRideService  extends IncyclistService{
 
 
         
+        // resumed first: nothing below may keep the scan suspended if it hangs or throws
+        if (!udid)
+            this.resumeScanAfterRide('stop')
+
         const adapters = this.rideAdapters
 
         this.emit('stop-ride')
