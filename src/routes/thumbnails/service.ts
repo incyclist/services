@@ -2,9 +2,12 @@ import { getBindings } from '../../api/bindings'
 import { Injectable, Singleton } from '../../base/decorators'
 import { IncyclistService } from '../../base/service'
 import { useLocalLinkClient } from '../../link/client/service'
-import { FAILURE_TTL_MS, FETCH_TIMEOUT_MS, MAX_THUMBNAIL_BYTES, THUMBNAIL_DIR, THUMBNAIL_EXT } from './consts'
+import { FAILURE_TTL_MS, FETCH_TIMEOUT_MS, MAX_COMPUTER_REQUESTS, MAX_THUMBNAIL_BYTES, THUMBNAIL_DIR, THUMBNAIL_EXT } from './consts'
 import { getKeys, isCacheableUrl } from './keys'
 import type { ThumbnailRequest } from './types'
+
+type DownloadResult = { data?: Buffer, gone?: boolean }
+type ThumbnailSource = { key: string, goneKey?: string, fetch: () => Promise<DownloadResult> }
 
 /**
  * Keeps every route thumbnail on the device, permanently, after its first successful fetch.
@@ -25,6 +28,10 @@ import type { ThumbnailRequest } from './types'
 export class RouteThumbnailCacheService extends IncyclistService {
     protected inflight = new Map<string, Promise<string | undefined>>()
     protected failedAt = new Map<string, number>()
+    /** computer thumbnails (key and handle) the computer answered with 404/410: no thumbnail, not retried in this session */
+    protected gone = new Set<string>()
+    protected activeComputerRequests = 0
+    protected waitingComputerRequests: Array<() => void> = []
 
     constructor() {
         super('RouteThumbnailCache')
@@ -112,11 +119,14 @@ export class RouteThumbnailCacheService extends IncyclistService {
         try {
             const sources = this.getSources(request, keys)
             for (const source of sources) {
-                if (this.isRecentlyFailed(source.key))
+                if (this.isRecentlyFailed(source.key) || (source.goneKey && this.gone.has(source.goneKey)))
                     continue
-                const data = await source.fetch()
+                const { data, gone } = await source.fetch()
                 if (!data) {
-                    this.failedAt.set(source.key, Date.now())
+                    if (gone && source.goneKey)
+                        this.gone.add(source.goneKey)
+                    else
+                        this.failedAt.set(source.key, Date.now())
                     continue
                 }
                 const path = await this.store(source.key, data)
@@ -131,8 +141,8 @@ export class RouteThumbnailCacheService extends IncyclistService {
     }
 
     /** `keys` follow the order of {@link getKeys}: url first (if cacheable), then the computer */
-    protected getSources(request: ThumbnailRequest, keys: string[]): Array<{ key: string, fetch: () => Promise<Buffer | undefined> }> {
-        const sources: Array<{ key: string, fetch: () => Promise<Buffer | undefined> }> = []
+    protected getSources(request: ThumbnailRequest, keys: string[]): ThumbnailSource[] {
+        const sources: ThumbnailSource[] = []
         let i = 0
         if (isCacheableUrl(request.url)) {
             const url = request.url
@@ -140,7 +150,7 @@ export class RouteThumbnailCacheService extends IncyclistService {
         }
         if (request.link && keys[i]) {
             const link = request.link
-            sources.push({ key: keys[i], fetch: () => this.downloadFromLink(link.linkId, link.thumbHandle) })
+            sources.push({ key: keys[i], goneKey: `${keys[i]}|${link.thumbHandle}`, fetch: () => this.downloadFromLink(link.linkId, link.thumbHandle) })
         }
         return sources
     }
@@ -150,26 +160,61 @@ export class RouteThumbnailCacheService extends IncyclistService {
         return at !== undefined && Date.now() - at < FAILURE_TTL_MS
     }
 
-    protected async downloadFromLink(linkId: string, handle: string): Promise<Buffer | undefined> {
-        const media = await this.getLocalLinkClient().getMedia(linkId)
-        if (!media)
-            return undefined
-        return await this.download(`${media.baseUrl}/t/${encodeURIComponent(handle)}`, { Authorization: `Bearer ${media.token}` })
+    protected async downloadFromLink(linkId: string, handle: string): Promise<DownloadResult> {
+        await this.acquireComputerSlot()
+        try {
+            // the token is requested once the slot is free, so a queued request never holds a stale one
+            const media = await this.getLocalLinkClient().getMedia(linkId)
+            if (!media)
+                return {}
+            return await this.request(`${media.baseUrl}/t/${encodeURIComponent(handle)}`, 'computer', { Authorization: `Bearer ${media.token}` })
+        }
+        finally {
+            this.releaseComputerSlot()
+        }
     }
 
-    /** @returns the body, `undefined` unless the server answered `2xx` with a non-empty, reasonably sized body */
-    protected async download(url: string, headers?: Record<string, string>): Promise<Buffer | undefined> {
+    protected async acquireComputerSlot(): Promise<void> {
+        if (this.activeComputerRequests < MAX_COMPUTER_REQUESTS) {
+            this.activeComputerRequests++
+            return
+        }
+        // the slot is handed over directly, the count stays
+        await new Promise<void>(resolve => this.waitingComputerRequests.push(resolve))
+    }
+
+    protected releaseComputerSlot(): void {
+        const next = this.waitingComputerRequests.shift()
+        if (next)
+            next()
+        else
+            this.activeComputerRequests = Math.max(0, this.activeComputerRequests - 1)
+    }
+
+    protected async download(url: string, headers?: Record<string, string>): Promise<DownloadResult> {
+        return await this.request(url, 'url', headers)
+    }
+
+    /**
+     * @returns the body (only for a `2xx` with a non-empty, reasonably sized body); `gone` if the server
+     * says the file does not exist (404/410). Failures are logged with status and duration, never the url.
+     */
+    protected async request(url: string, source: 'url' | 'computer', headers?: Record<string, string>): Promise<DownloadResult> {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+        const started = Date.now()
         try {
             const response = await fetch(url, { headers, signal: controller.signal })
-            if (response.status < 200 || response.status >= 300)
-                return undefined
+            if (response.status < 200 || response.status >= 300) {
+                this.logEvent({ message: 'thumbnail fetch failed', source, status: response.status, durationMs: Date.now() - started })
+                return { gone: source === 'computer' && (response.status === 404 || response.status === 410) }
+            }
             const data = Buffer.from(await response.arrayBuffer())
-            return data.length > 0 && data.length <= MAX_THUMBNAIL_BYTES ? data : undefined
+            return data.length > 0 && data.length <= MAX_THUMBNAIL_BYTES ? { data } : {}
         }
-        catch {
-            return undefined
+        catch (err) {
+            this.logEvent({ message: 'thumbnail fetch error', source, error: (err as Error)?.name, durationMs: Date.now() - started })
+            return {}
         }
         finally {
             clearTimeout(timer)

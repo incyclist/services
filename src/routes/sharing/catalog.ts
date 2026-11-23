@@ -27,8 +27,10 @@ export interface CatalogBuildOptions {
 export interface CatalogBuild {
     document: CatalogDocument
     handles: MediaState['handles']
-    /** counts of what was left out because of its file type; never paths */
+    /** counts of what was left out because of its file type or because the file is missing; never paths */
     skipped: { video: number, thumbnail: number }
+    /** number of entries with and without a thumbnail handle */
+    thumbnails: { with: number, without: number }
 }
 
 const extensionOf = (path: string): string => {
@@ -81,7 +83,12 @@ const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOpti
 
     let thumbHandle: string | undefined
     const thumbPath = fileUrlToPath(descr.previewUrl)
-    const thumbnailSkipped = !!thumbPath && !isImageType(thumbPath)
+    let thumbnailSkipped = !!thumbPath && !isImageType(thumbPath)
+    if (thumbPath && !thumbnailSkipped) {
+        // the path is the one the media server opens; a preview that is not there would only ever be answered with 410
+        const thumbSize = await opts.stat(thumbPath)
+        thumbnailSkipped = !thumbSize
+    }
     if (thumbPath && !thumbnailSkipped) {
         thumbHandle = opts.makeHandle('t', thumbPath)
         handles.push({ handle: thumbHandle, path: thumbPath, contentType: IMAGE_TYPES[extensionOf(thumbPath)] })
@@ -142,5 +149,7 @@ export const buildCatalog = async (descriptions: RouteInfo[], opts: CatalogBuild
     const routes = built.map(b => b.entry)
     const catalogVersion = opts.hash(canonicalJson(routes))
     skipped.thumbnail = built.filter(b => b.thumbnailSkipped).length
-    return { document: { catalogVersion, routes }, handles: built.flatMap(b => b.handles), skipped }
+    const withThumbnail = routes.filter(r => r.thumbHandle).length
+    const thumbnails = { with: withThumbnail, without: routes.length - withThumbnail }
+    return { document: { catalogVersion, routes }, handles: built.flatMap(b => b.handles), skipped, thumbnails }
 }

@@ -40,7 +40,7 @@ describe('buildCatalog', () => {
             route({ id: 'b', isDownloaded: true, videoUrl: 'file:///d/b.mkv' }),
             route({ id: 'c', videoUrl: 'video:///d/c.mp4' }),
             route({ id: 'd', isDownloaded: true, videoUrl: 'https://remote/d.mp4' }),
-        ], opts({ '/d/a.mp4': 100 }))
+        ], opts({ '/d/a.mp4': 100, '/d/a.jpg': 7 }))
 
         expect(res.document.routes.map(r => r.routeKey)).toEqual(['b', 'ha'])
         const a = res.document.routes[1]
@@ -63,7 +63,7 @@ describe('buildCatalog', () => {
             route({ id: 'c', isLocal: true, routeHash: 'hc', videoUrl: 'video:///d/c' }),
             route({ id: 'd', isLocal: true, routeHash: 'hd', videoUrl: 'video:///d/constructor' }),
             route({ id: 'e', isLocal: true, routeHash: 'he', videoUrl: 'video:///d/e.MP4', previewUrl: 'file:///d/e.PNG' }),
-        ], opts())
+        ], opts({ '/d/e.PNG': 3 }))
 
         expect(res.document.routes.map(r => r.routeKey)).toEqual(['ha', 'he'])
         expect(res.document.routes[0].thumbHandle).toBeUndefined()
@@ -71,6 +71,28 @@ describe('buildCatalog', () => {
         expect(res.handles.map(h => h.path)).toEqual(['/d/a.mp4', '/d/e.MP4', '/d/e.PNG'])
         expect(res.handles.every(h => h.contentType !== undefined)).toBe(true)
         expect(res.skipped).toEqual({ video: 3, thumbnail: 1 })
+    })
+
+    test('a preview file that is missing or empty gets no thumbHandle, is counted, and the route stays', async () => {
+        const res = await buildCatalog([
+            route({ id: 'a', isLocal: true, routeHash: 'ha', videoUrl: 'video:///d/a.mp4', previewUrl: 'file:///d/gone.jpg' }),
+            route({ id: 'b', isLocal: true, routeHash: 'hb', videoUrl: 'video:///d/b.mp4', previewUrl: 'file:///d/empty.jpg' }),
+            route({ id: 'c', isLocal: true, routeHash: 'hc', videoUrl: 'video:///d/c.mp4', previewUrl: 'file:///d/my%20pic.jpg' }),
+            route({ id: 'd', isLocal: true, routeHash: 'hd', videoUrl: 'video:///d/d.mp4' }),
+        ], opts({ '/d/empty.jpg': 0, '/d/my pic.jpg': 10 }))
+
+        expect(res.document.routes.map(r => r.routeKey)).toEqual(['ha', 'hb', 'hc', 'hd'])
+        expect(res.document.routes.map(r => r.thumbHandle !== undefined)).toEqual([false, false, true, false])
+        expect(res.handles.map(h => h.path)).toEqual(['/d/a.mp4', '/d/b.mp4', '/d/c.mp4', '/d/my pic.jpg', '/d/d.mp4'])
+        expect(res.skipped).toEqual({ video: 0, thumbnail: 2 })
+        expect(res.thumbnails).toEqual({ with: 1, without: 3 })
+    })
+
+    test('catalog version changes when a preview file disappears', async () => {
+        const r = route({ id: 'a', isLocal: true, routeHash: 'ha', videoUrl: 'video:///d/a.mp4', previewUrl: 'file:///d/a.jpg' })
+        const present = await buildCatalog([r], opts({ '/d/a.jpg': 5 }))
+        const gone = await buildCatalog([r], opts())
+        expect(present.document.catalogVersion).not.toBe(gone.document.catalogVersion)
     })
 
     test('duplicate keys are listed once', async () => {

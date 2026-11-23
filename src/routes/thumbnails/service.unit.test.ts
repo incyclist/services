@@ -120,6 +120,64 @@ describe('RouteThumbnailCacheService', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1)
         })
 
+        test('a computer answering 410 or 404 has no thumbnail: logged, not retried even after the failure TTL', async () => {
+            const logged: Array<Record<string, unknown>> = []
+            jest.spyOn(service as never, 'logEvent').mockImplementation(((e: Record<string, unknown>) => { logged.push(e) }) as never)
+            respond = () => ({ status: 410 })
+            expect(await service.cache(link)).toBeUndefined()
+            service['failedAt'].clear()
+            expect(await service.cache(link)).toBeUndefined()
+            expect(fetchMock).toHaveBeenCalledTimes(1)
+            const ev = logged.find(e => e.status === 410)
+            expect(ev).toBeDefined()
+            expect(typeof ev!.durationMs).toBe('number')
+            expect(JSON.stringify(logged)).not.toContain('abc')
+            expect(JSON.stringify(logged)).not.toContain('sec')
+        })
+
+        test('a 410 for one handle does not block a new handle of the same route', async () => {
+            respond = () => ({ status: 410 })
+            await service.cache(link)
+            service['failedAt'].clear()
+            respond = () => ({ status: 200, body: Buffer.from('x') })
+            expect(await service.cache({ routeKey: link.routeKey, link: { linkId: 'L', thumbHandle: 'def' } })).toBeDefined()
+        })
+
+        test('a 500 from a computer is retried after the failure TTL', async () => {
+            respond = () => ({ status: 500 })
+            await service.cache(link)
+            service['failedAt'].clear()
+            await service.cache(link)
+            expect(fetchMock).toHaveBeenCalledTimes(2)
+        })
+
+        test('a network error is logged without the url', async () => {
+            const logged: Array<Record<string, unknown>> = []
+            jest.spyOn(service as never, 'logEvent').mockImplementation(((e: Record<string, unknown>) => { logged.push(e) }) as never)
+            respond = () => 'down'
+            await service.cache(link)
+            expect(logged).toHaveLength(1)
+            expect(typeof logged[0].durationMs).toBe('number')
+            expect(JSON.stringify(logged)).not.toContain('127.0.0.1')
+        })
+
+        test('never has more than a few requests to a computer in flight', async () => {
+            let inflight = 0
+            let peak = 0
+            fetchMock.mockImplementation(async () => {
+                inflight++
+                peak = Math.max(peak, inflight)
+                await new Promise(resolve => setTimeout(resolve, 5))
+                inflight--
+                return { status: 200, arrayBuffer: async () => Uint8Array.from([1, 2]).buffer }
+            })
+            const requests = Array.from({ length: 20 }, (_, i) => ({ routeKey: `c${n}-${i}`, link: { linkId: 'L', thumbHandle: `h${i}` } }))
+            const results = await Promise.all(requests.map(r => service.cache(r)))
+            expect(results.every(r => r !== undefined)).toBe(true)
+            expect(peak).toBeLessThanOrEqual(4)
+            expect(peak).toBeGreaterThan(1)
+        })
+
         test('does not cache local schemes', async () => {
             expect(await service.cache({ routeKey: 'r1', url: 'file:///a.jpg' })).toBeUndefined()
             expect(fetchMock).not.toHaveBeenCalled()

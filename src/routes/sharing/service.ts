@@ -326,7 +326,8 @@ export class RouteSharingService extends IncyclistService {
                 hash: text => sha256Base64Url(text).slice(0, 22),
             })
             if (this.catalog.skipped.video || this.catalog.skipped.thumbnail)
-                this.logEvent({ message: 'routes left out of the shared catalog (unsupported file type)', ...this.catalog.skipped })
+                this.logEvent({ message: 'routes or thumbnails left out of the shared catalog (unsupported file type or missing file)', ...this.catalog.skipped })
+            this.logEvent({ message: 'published-media', routes: this.catalog.document.routes.length, withThumbnail: this.catalog.thumbnails.with, withoutThumbnail: this.catalog.thumbnails.without })
             await this.publish()
             if (previous !== this.getCatalogVersion())
                 this.emit('catalog-changed', { catalogVersion: this.getCatalogVersion(), routeCount: this.getRouteCount() })
