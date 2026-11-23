@@ -65,7 +65,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected routeVideoUpdateHandler   = this.onRouteVideoUpdate.bind(this)
     protected downloadRowsUpdateHandler = this.emitDownloadUpdate.bind(this)
     protected accessChangedHandler      = this.updatePageDisplay.bind(this)
-    protected linkStateHandler          = this.updatePageDisplay.bind(this)
+    protected linkStateHandler          = this.onLinkStateChanged.bind(this)
 
     // availability props per route, so that an unchanged route keeps its identity between renders
     protected availabilityCache: Map<string, {source:RouteItemProps, key:string, decorated:RouteItemProps}> = new Map()
@@ -1052,6 +1052,18 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             this.logError(err, 'onStateUpdate')
         }
         this.updatePageDisplay()
+    }
+
+    /** a link event: the page and an open details dialog show where the route is available from */
+    protected onLinkStateChanged() {
+        this.updatePageDisplay()
+        try {
+            if (this.detailRouteId)
+                this.emitRouteDetailsUpdate(this.detailRouteId)
+        }
+        catch (err: any) {
+            this.logError(err, 'onLinkStateChanged')
+        }
     }
 
     protected refreshServiceState(state?: unknown) {

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { Inject } from '../../base/decorators'
 import { RoutesPageService } from './service'
 import { RouteCard } from '../list/cards/RouteCard'
@@ -1041,6 +1042,53 @@ describe('RoutesPageService',()=>{
             const props = service.getRouteDetailsProps('b')
             expect(props).toMatchObject({ routeId: 'b', availability: 'fromLink', sourceLabel: 'Den PC' })
             expect(props).not.toHaveProperty('unavailableReason')
+        })
+
+        test('an open details dialog is told when a computer comes back, and its props change from unavailable to fromLink', () => {
+            const client = new EventEmitter()
+            Inject('LocalLinkClient', client)
+            Inject('VideoAvailability', { on: jest.fn(), off: jest.fn() })
+            Inject('FolderAccess', { on: jest.fn(), off: jest.fn() })
+            try {
+                // the card reports the state of the computer
+                card.getAvailability.mockReturnValue({ canStart: false, availability: 'unavailable', unavailableReason: 'linkUnreachable', sourceLabel: 'Den PC', linkId: 'A' })
+                s.updatePageDisplay = jest.fn()
+                s.pageObserver = new Observer()
+                s.detailRouteId = 'b'
+                s.startEventListener()
+                const updates: string[] = []
+                s.getPageObserver().on('route-details-update', (id: string) => updates.push(id))
+                expect(service.getRouteDetailsProps('b')).toMatchObject({ availability: 'unavailable', unavailableReason: 'linkUnreachable' })
+
+                card.getAvailability.mockReturnValue({ canStart: true, availability: 'fromLink', sourceLabel: 'Den PC', linkId: 'A' })
+                client.emit('session-changed', { linkId: 'A', session: {} })
+
+                expect(updates).toEqual(['b'])
+                expect(s.updatePageDisplay).toHaveBeenCalled()
+                const props = service.getRouteDetailsProps('b')
+                expect(props).toMatchObject({ availability: 'fromLink' })
+                expect(props).not.toHaveProperty('unavailableReason')
+
+                client.emit('state-changed', {})
+                sharing.on.mock.calls.find(c => c[0] === 'synced')[1]()
+                expect(updates).toEqual(['b', 'b', 'b'])
+                s.stopEventListener()
+            }
+            finally {
+                Inject('LocalLinkClient', null)
+                Inject('VideoAvailability', null)
+                Inject('FolderAccess', null)
+            }
+        })
+
+        test('a link event without an open details dialog sends no details update', () => {
+            s.updatePageDisplay = jest.fn()
+            s.pageObserver = new Observer()
+            const updates: string[] = []
+            s.getPageObserver().on('route-details-update', (id: string) => updates.push(id))
+            s.onLinkStateChanged()
+            expect(updates).toEqual([])
+            expect(s.updatePageDisplay).toHaveBeenCalledTimes(1)
         })
 
         test('route details of a route that does not depend on route sharing carry none while it is not available', () => {
