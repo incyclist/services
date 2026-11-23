@@ -1,4 +1,5 @@
 import { getBindings } from '../../../api/bindings'
+import { isPositive } from '../../../utils/valid'
 import { Injectable, Singleton } from '../../../base/decorators'
 import { IncyclistService } from '../../../base/service'
 import { useLocalLinkClient } from '../../../link/client/service'
@@ -286,7 +287,7 @@ export class RouteCopyService extends IncyclistService {
 
     /** @returns the numbers for the refusal if the video does not fit, otherwise `undefined` */
     protected async checkSpace(dir: string, sizeBytes: number): Promise<{ sizeBytes: number, freeBytes: number } | undefined> {
-        if (!(sizeBytes > 0))
+        if (!isPositive(sizeBytes))
             return undefined
         const freeBytes = await this.getFreeBytes(dir)
         if (freeBytes === undefined || freeBytes >= sizeBytes + COPY_STORAGE_MARGIN_BYTES)

@@ -16,7 +16,7 @@ import { RouteCard } from "./cards/RouteCard";
 import { RouteSettings, SummaryCardDisplayProps } from "./cards/types";
 import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteAddSource, RouteListLog, RouteListSortOrder, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
-import { valid } from "../../utils/valid";
+import { isPositive, valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
@@ -1190,7 +1190,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected updateCountryIfMissing(route:Route):void {
-        if (route.description.country || !(route.points?.length>0))
+        if (route.description.country || !isPositive(route.points?.length))
             return
 
         this.logEvent({message:'route update required (country)',route:route.title})

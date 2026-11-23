@@ -1024,7 +1024,7 @@ export class LocalLinkClientService extends IncyclistService {
         try {
             await this.ready()
             for (const link of this.getRetryTargets())
-                await this.connectKnown(link)
+                await this.connectKnown(link) // NOSONAR sequential: one connection attempt at a time, no burst on the network
         }
         catch (err) {
             this.logError(err as Error, 'runRetry')

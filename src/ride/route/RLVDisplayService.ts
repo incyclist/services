@@ -644,13 +644,13 @@ export class RLVDisplayService extends RouteDisplayService {
                 return false
 
             video.fellThrough = true
-            void this.tryNextSource(error, video)
-            return true
         }
         catch(err) {
             this.logError(err,'fallThroughToNextSource')
             return false
         }
+        this.tryNextSource(error, video).catch(err => this.logError(err,'tryNextSource'))
+        return true
     }
 
     /** Applies the next source; if there is none (or it fails), the load error is reported. Never rejects. */

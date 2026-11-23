@@ -89,7 +89,7 @@ export class RouteThumbnailCacheService extends IncyclistService {
         try {
             for (const key of getKeys(request)) {
                 const path = this.getPath(key)
-                if (path && await getBindings().fs!.existsFile(path))
+                if (path && await getBindings().fs!.existsFile(path)) // NOSONAR sequential: file operations one at a time
                     await getBindings().fs!.unlink(path) // NOSONAR sequential: file operations one at a time
                 this.failedAt.delete(key)
             }

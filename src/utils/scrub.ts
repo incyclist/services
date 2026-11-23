@@ -5,46 +5,60 @@ const isSchemeChar = (c: string): boolean => isLetter(c) || (c >= '0' && c <= '9
 const isBodyChar = (c: string): boolean => !/\s/.test(c) && !'"\'<>?#'.includes(c)
 const isTailChar = (c: string): boolean => !/\s/.test(c) && !'"\'<>)'.includes(c)
 
+const skipWhile = (text: string, from: number, test: (c: string) => boolean): number => {
+    let end = from
+    while (end < text.length && test(text[end]))
+        end++
+    return end
+}
+
+interface UrlScan {
+    /** end of the part that is kept (the URL without query), -1 if there is no query */
+    keepEnd: number
+    /** end of the removed part */
+    tailEnd: number
+    /** the scheme run ends here */
+    schemeEnd: number
+    /** a failed body scan: starts from `bodyStart` up to `bodyEnd` fail alike */
+    failed?: { from: number, to: number }
+}
+
+const scanUrlAt = (text: string, start: number, failed: { from: number, to: number }): UrlScan => {
+    const schemeEnd = skipWhile(text, start, isSchemeChar)
+    const none = { keepEnd: -1, tailEnd: -1, schemeEnd }
+    const bodyStart = schemeEnd + 3
+    if (!text.startsWith('://', schemeEnd) || (bodyStart >= failed.from && bodyStart <= failed.to))
+        return none
+    const bodyEnd = skipWhile(text, bodyStart, isBodyChar)
+    if (text[bodyEnd] !== '?' && text[bodyEnd] !== '#')
+        return { ...none, failed: { from: bodyStart, to: bodyEnd } }
+    return { keepEnd: bodyEnd, tailEnd: skipWhile(text, bodyEnd + 1, isTailChar), schemeEnd }
+}
+
 /**
  * Cuts the query string and fragment off every `scheme://...` URL, in linear time (a regular expression
  * for this backtracks super-linearly). A start inside a scheme run leads to the same end as the run's
  * first letter, and a failed body scan is reused by the starts that fall into it.
  */
 const stripUrlQueries = (text: string): string => {
-    const n = text.length
     let out = ''
     let copied = 0
     let i = 0
-    let failFrom = -1
-    let failTo = -1
-    while (i < n) {
+    let failed = { from: -1, to: -1 }
+    while (i < text.length) {
         if (!isLetter(text[i])) {
             i++
             continue
         }
-        let schemeEnd = i
-        while (schemeEnd < n && isSchemeChar(text[schemeEnd]))
-            schemeEnd++
-        const bodyStart = schemeEnd + 3
-        if (!text.startsWith('://', schemeEnd) || (bodyStart >= failFrom && bodyStart <= failTo)) {
-            i = schemeEnd
+        const scan = scanUrlAt(text, i, failed)
+        failed = scan.failed ?? failed
+        if (scan.keepEnd < 0) {
+            i = scan.schemeEnd
             continue
         }
-        let bodyEnd = bodyStart
-        while (bodyEnd < n && isBodyChar(text[bodyEnd]))
-            bodyEnd++
-        if (bodyEnd >= n || (text[bodyEnd] !== '?' && text[bodyEnd] !== '#')) {
-            failFrom = bodyStart
-            failTo = bodyEnd
-            i = schemeEnd
-            continue
-        }
-        let tailEnd = bodyEnd + 1
-        while (tailEnd < n && isTailChar(text[tailEnd]))
-            tailEnd++
-        out += text.slice(copied, bodyEnd)
-        copied = tailEnd
-        i = tailEnd
+        out += text.slice(copied, scan.keepEnd)
+        copied = scan.tailEnd
+        i = scan.tailEnd
     }
     return out + text.slice(copied)
 }

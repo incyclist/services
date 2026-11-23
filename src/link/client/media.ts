@@ -1,4 +1,5 @@
 import { getBindings } from '../../api/bindings'
+import { isPositive } from '../../utils/valid'
 import type { LinkClientPlatform } from './types'
 
 interface PipeInfo {
@@ -46,7 +47,7 @@ export class LinkMediaPath {
      * media is unavailable.
      */
     async getBaseUrl(linkId: string, host: string, mediaPort: number): Promise<string | undefined> {
-        if (!this.isAvailable() || !(mediaPort > 0))
+        if (!this.isAvailable() || !isPositive(mediaPort))
             return undefined
         if (!this.usesPipe())
             return `http://${formatHost(host)}:${mediaPort}`

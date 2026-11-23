@@ -495,7 +495,8 @@ export class RouteSharingClientService extends IncyclistService {
 
     /** Materialises the catalogs that arrived before the route list was loaded. */
     protected async materializeCached(): Promise<void> {
-        for (const entries of [...this.catalogs.values()])
+        // snapshot: catalogs that arrive meanwhile are materialized by their own call
+        for (const entries of [...this.catalogs.values()]) // NOSONAR
             await this.materializer.materialize(entries) // NOSONAR sequential: catalogs are materialized one at a time
     }
 
@@ -721,7 +722,7 @@ export class RouteSharingClientService extends IncyclistService {
                 failure = err
                 this.rememberFailure(linkId, routeKey, err)
                 if (err.reason === 'unknown-route')
-                    await this.onStaleHandle(linkId, routeKey)
+                    await this.onStaleHandle(linkId, routeKey) // NOSONAR sequential: the stale computer is resynced before the next one is asked
             }
         }
         throw failure
