@@ -12,6 +12,7 @@ import { buildRouteDescriptor } from './descriptor'
 import type { RouteDescriptorError, RouteDescriptorResponseBody } from './types'
 
 const REFRESH_DEBOUNCE_MS = 1500
+const STAT_TIMEOUT_MS = 3000
 const VIDEO_DIR_KEY = 'videos.directory'
 const SETTINGS_REQUESTER = 'RouteSharing'
 
@@ -325,7 +326,7 @@ export class RouteSharingService extends IncyclistService {
                 stat: path => this.getFileSize(path),
                 hash: text => sha256Base64Url(text).slice(0, 22),
             })
-            if (this.catalog.skipped.video || this.catalog.skipped.thumbnail)
+            if (this.catalog.skipped.video || this.catalog.skipped.thumbnail || this.catalog.skipped.missingVideo)
                 this.logEvent({ message: 'routes or thumbnails left out of the shared catalog (unsupported file type or missing file)', ...this.catalog.skipped })
             this.logEvent({ message: 'published-media', routes: this.catalog.document.routes.length, withThumbnail: this.catalog.thumbnails.with, withoutThumbnail: this.catalog.thumbnails.without })
             await this.publish()
@@ -365,12 +366,25 @@ export class RouteSharingService extends IncyclistService {
     }
 
     protected async getFileSize(path: string): Promise<number | undefined> {
+        let timer: ReturnType<typeof setTimeout> | undefined
         try {
-            const stat = await this.getBindings().fs?.stat?.(path)
+            // a stat on an unresponsive network mount can hang; treat it as missing for this publish
+            const timeout = new Promise<'timeout'>(resolve => {
+                timer = setTimeout(() => resolve('timeout'), STAT_TIMEOUT_MS)
+                timer.unref?.()
+            })
+            const stat = await Promise.race([this.getBindings().fs?.stat?.(path), timeout])
+            if (stat === 'timeout') {
+                this.logEvent({ message: 'file stat timed out, treated as missing', timeoutMs: STAT_TIMEOUT_MS })
+                return undefined
+            }
             return typeof stat?.size === 'number' ? stat.size : undefined
         }
         catch {
             return undefined
+        }
+        finally {
+            clearTimeout(timer)
         }
     }
 

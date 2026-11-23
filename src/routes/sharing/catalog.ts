@@ -28,7 +28,7 @@ export interface CatalogBuild {
     document: CatalogDocument
     handles: MediaState['handles']
     /** counts of what was left out because of its file type or because the file is missing; never paths */
-    skipped: { video: number, thumbnail: number }
+    skipped: { video: number, thumbnail: number, missingVideo: number }
     /** number of entries with and without a thumbnail handle */
     thumbnails: { with: number, without: number }
 }
@@ -76,7 +76,12 @@ export const buildSummary = (descr: RouteInfo): SharedRouteSummary => {
 
 type BuiltEntry = { entry: CatalogEntry, handles: MediaState['handles'], thumbnailSkipped: boolean }
 
-const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOptions): Promise<BuiltEntry> => {
+/** `undefined` if the video file is missing or empty: such a route can not be played by a tablet, so it is not published */
+const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOptions): Promise<BuiltEntry | undefined> => {
+    const videoSize = await opts.stat(path)
+    if (!videoSize)
+        return undefined
+
     const handles: MediaState['handles'] = []
     const videoHandle = opts.makeHandle('v', path)
     handles.push({ handle: videoHandle, path, contentType: VIDEO_TYPES[extensionOf(path)] })
@@ -100,7 +105,7 @@ const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOpti
         title: descr.title ?? '',
         videoHandle,
         videoFormat: descr.videoFormat ?? extensionOf(path),
-        size: (await opts.stat(path)) ?? 0,
+        size: videoSize,
         // the transport reports no modification time; the route's own change time is the best available signal
         mtime: descr.tsLastChange ?? descr.tsImported ?? 0,
         origin: descr.isLocal ? 'local' : 'official',
@@ -118,13 +123,14 @@ const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOpti
  * Builds the catalog document and the handle table from the route descriptions.
  * Only files of a known video type (and, for thumbnails, a known image type) are shared: a route
  * with another video type is left out, another thumbnail type only drops the thumbnail.
+ * A route whose video file is missing (e.g. an unmounted NAS) is left out and counted in `skipped.missingVideo`.
  * Routes whose key already occurred are skipped; entries are sorted by key so that the
  * catalog version only changes when the content does.
  */
 export const buildCatalog = async (descriptions: RouteInfo[], opts: CatalogBuildOptions): Promise<CatalogBuild> => {
     const seen = new Set<string>()
     const candidates: Array<{ descr: RouteInfo, path: string }> = []
-    const skipped = { video: 0, thumbnail: 0 }
+    const skipped = { video: 0, thumbnail: 0, missingVideo: 0 }
     for (const descr of descriptions) {
         if (!isShareable(descr) || !descr.id)
             continue
@@ -142,7 +148,13 @@ export const buildCatalog = async (descriptions: RouteInfo[], opts: CatalogBuild
     const built: BuiltEntry[] = []
     for (let i = 0; i < candidates.length; i += STAT_CONCURRENCY) {
         const chunk = candidates.slice(i, i + STAT_CONCURRENCY)
-        built.push(...await Promise.all(chunk.map(c => buildEntry(c.descr, c.path, opts))))
+        const entries = await Promise.all(chunk.map(c => buildEntry(c.descr, c.path, opts)))
+        for (const b of entries) {
+            if (b)
+                built.push(b)
+            else
+                skipped.missingVideo++
+        }
     }
     built.sort((a, b) => (a.entry.routeKey < b.entry.routeKey ? -1 : Number(a.entry.routeKey > b.entry.routeKey)))
 
