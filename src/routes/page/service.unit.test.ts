@@ -1137,4 +1137,31 @@ describe('RoutesPageService',()=>{
             }
         })
     })
+
+    describe('retryLinks', () => {
+        let s
+        beforeEach(() => {
+            setupMocks()
+            s = new RoutesPageService()
+            s.logError = jest.fn()
+        })
+        afterEach(() => {
+            resetMocks()
+            Inject('LocalLinkClient', null)
+            s.reset()
+        })
+
+        test('asks the computers client to try the saved addresses now', () => {
+            const client = { retryNow: jest.fn() }
+            Inject('LocalLinkClient', client)
+            s.retryLinks()
+            expect(client.retryNow).toHaveBeenCalledTimes(1)
+        })
+
+        test('a failing client does not throw', () => {
+            Inject('LocalLinkClient', { retryNow: jest.fn(() => { throw new Error('boom') }) })
+            expect(() => s.retryLinks()).not.toThrow()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'retryLinks')
+        })
+    })
 })

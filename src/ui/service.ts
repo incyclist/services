@@ -19,6 +19,7 @@ import { AppFeatures, Interfaces, useAppState, useFeatureToggleSync } from "../a
 import { IncyclistPageService } from "../base/pages";
 import { waitNextTick } from "../utils";
 import { sleep } from "../utils/sleep";
+import { useLocalLinkClient } from "../link/client/service";
 
 const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
 
@@ -179,6 +180,7 @@ export class UserInterfaceServcie extends IncyclistService {
             // unlike the teardown it costs nothing to reverse if the user comes straight back.
             useDeviceAccess().pauseBackgroundActivity()
                 .catch( (err)=> { this.logError(err,'onAppPause:pauseBackgroundActivity') })
+            useLocalLinkClient().onBackground()
 
             this.backgroundTimer = setTimeout(()=> {
                 // Cleared here too, not just in onAppResume(): once this fires, the handle is
@@ -223,6 +225,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
             useDeviceAccess().resumeBackgroundActivity()
                 .catch( (err)=> { this.logError(err,'onAppResume:resumeBackgroundActivity') })
+            useLocalLinkClient().onForeground()
 
             if (resumeRequired) {
                 this.resume().catch( (err)=> { this.logError(err,'onAppResume:resume') })

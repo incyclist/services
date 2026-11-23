@@ -83,6 +83,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             EventLogger.setGlobalConfig('page','Routes')
 
             super.openPage()
+            this.retryLinks()
 
             try {
                 const service = useRouteList()
@@ -1040,6 +1041,15 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     protected onStateUpdate() {
         this.updatePageDisplay()
+    }
+
+    protected retryLinks() {
+        try {
+            this.getLocalLinkClient().retryNow()
+        }
+        catch (err: any) {
+            this.logError(err, 'retryLinks')
+        }
     }
 
     protected onDialogClosed() {

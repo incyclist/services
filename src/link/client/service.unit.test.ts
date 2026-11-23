@@ -881,6 +881,115 @@ describe('LocalLinkClientService', () => {
         })
     })
 
+    describe('foreground retries of the saved address', () => {
+        let linkId: string
+        const connects = () => net.connects.length
+        const advance = (ms: number) => jest.advanceTimersByTimeAsync(ms)
+
+        beforeEach(async () => {
+            linkId = await pairPhone()
+            await restartPhoneWithoutHost()
+            mdns.find.mockClear()
+            access.pauseBackgroundActivity.mockClear()
+            net.connects.length = 0
+        })
+
+        test('retries after 5 s, 15 s, 30 s and then every 60 s, never browsing', async () => {
+            const expected: Array<[number, number]> = [[4999, 0], [1, 1], [14_999, 1], [1, 2], [29_999, 2], [1, 3], [59_999, 3], [1, 4], [59_999, 4], [1, 5]]
+            for (const [ms, count] of expected) {
+                await advance(ms)
+                expect(connects()).toBe(count)
+            }
+            expect(mdns.find).not.toHaveBeenCalled()
+            expect(access.pauseBackgroundActivity).not.toHaveBeenCalledWith('local-link')
+        })
+        test('stops once the computer is back and a session is open', async () => {
+            await advance(5000)
+            expect(client.getSession(linkId)).toBeUndefined()
+            net.endpoints.set(HOST_ID, hostLink.endpoint)
+            await advance(16_000)
+            expect(client.getSession(linkId)).toBeDefined()
+            expect(props().links[0]).toMatchObject({ reachability: 'reachable', connected: true })
+            const count = connects()
+            await advance(10 * 60_000)
+            expect(connects()).toBe(count)
+        })
+        test('no attempt while the app is in the background, one right away when it returns', async () => {
+            client.onBackground()
+            await advance(10 * 60_000)
+            expect(connects()).toBe(0)
+            client.onForeground()
+            await advance(1)
+            expect(connects()).toBe(1)
+        })
+        test('returning to the foreground starts the backoff over', async () => {
+            await advance(5000 + 15_000 + 30_000)
+            expect(connects()).toBe(3)
+            client.onBackground()
+            client.onForeground()
+            await advance(1)
+            expect(connects()).toBe(4)
+            await advance(4998)
+            expect(connects()).toBe(4)
+            await advance(1)
+            expect(connects()).toBe(5)
+        })
+        test('retryNow tries immediately', async () => {
+            client.retryNow()
+            await advance(1)
+            expect(connects()).toBe(1)
+        })
+        test('no attempt during a ride, a device scan or a device pairing, continues when idle again', async () => {
+            rideState = 'Active'
+            await advance(3 * 60_000)
+            expect(connects()).toBe(0)
+            rideState = 'Idle'
+            access.scanning = true
+            await advance(3 * 60_000)
+            expect(connects()).toBe(0)
+            access.scanning = false
+            devicePairing.isPairing.mockReturnValue(true)
+            await advance(3 * 60_000)
+            expect(connects()).toBe(0)
+            devicePairing.isPairing.mockReturnValue(false)
+            await advance(60_000)
+            expect(connects()).toBeGreaterThan(0)
+        })
+        test('a forgotten computer is not retried', async () => {
+            await client.forget(linkId)
+            await advance(5 * 60_000)
+            expect(connects()).toBe(0)
+        })
+        test('no attempt when the feature is off', async () => {
+            features.BRIDGE_MODE = false
+            await advance(5 * 60_000)
+            expect(connects()).toBe(0)
+        })
+        test('attempts never overlap', async () => {
+            let release: () => void = () => undefined
+            const spy = jest.spyOn(client as unknown as { connectKnown: () => Promise<boolean> }, 'connectKnown')
+                .mockImplementation(() => new Promise<boolean>(resolve => { release = () => resolve(false) }))
+            await advance(5000)
+            expect(spy).toHaveBeenCalledTimes(1)
+            client.retryNow()
+            client.onForeground()
+            await advance(5 * 60_000)
+            expect(spy).toHaveBeenCalledTimes(1)
+            release()
+            await advance(5000)
+            expect(spy).toHaveBeenCalledTimes(2)
+            release()
+        })
+        test('never throws, also when the checks fail', async () => {
+            const target = client as unknown as { getBusyReason: () => unknown, getRetryTargets: () => unknown }
+            jest.spyOn(target, 'getBusyReason').mockImplementation(() => { throw new Error('boom') })
+            await expect(advance(10_000)).resolves.not.toThrow()
+            jest.spyOn(target, 'getRetryTargets').mockImplementation(() => { throw new Error('boom') })
+            expect(() => { client.retryNow(); client.onForeground(); client.onBackground() }).not.toThrow()
+            await expect(advance(10_000)).resolves.not.toThrow()
+        })
+    })
+
     describe('rename and forget', () => {
         test('rename sets localName; every name shown uses it; empty resets', async () => {
             const linkId = await pairPhone()

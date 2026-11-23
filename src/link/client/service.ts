@@ -13,7 +13,7 @@ import { LinkBrowse, parseInstanceName } from './browse'
 import type { BrowseResult } from './browse'
 import { LinkClientConnection, LinkConnectionError } from './connection'
 import {
-    BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS, RECOVERY_MAX_PER_SESSION,
+    BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS, BACKGROUND_RECONNECT_DELAYS_MS, RECOVERY_MAX_PER_SESSION,
 } from './consts'
 import { LinkMediaPath } from './media'
 import { LinkPairingFlow } from './pairing'
@@ -96,6 +96,8 @@ export class LocalLinkClientService extends IncyclistService {
     protected mismatched = new Set<string>()
     protected searchBlocked?: LocalLinkClientDisplayProps['searchBlocked']
     protected loading?: Promise<void>
+    protected foreground = true
+    protected retry: { attempt: number, running: boolean, timer?: ReturnType<typeof setTimeout> } = { attempt: 0, running: false }
 
     constructor() {
         super('LocalLinkClient')
@@ -130,6 +132,7 @@ export class LocalLinkClientService extends IncyclistService {
         try {
             await this.ready()
             this.emitState()
+            this.startRetry()
         }
         catch (err) {
             this.logError(err as Error, 'init')
@@ -275,12 +278,58 @@ export class LocalLinkClientService extends IncyclistService {
                 .finally(() => {
                     this.checkRun = undefined
                     this.emitState()
+                    this.restartRetryBackoff()
                 })
             return this.checkRun
         }
         catch (err) {
             this.logError(err as Error, 'check')
             return Promise.resolve()
+        }
+    }
+
+    /**
+     * The app returns to the foreground: tries the saved address of every computer without a
+     * session right away and continues with the foreground retries.
+     */
+    onForeground(): void {
+        try {
+            this.foreground = true
+            this.retryNow()
+        }
+        catch (err) {
+            this.logError(err as Error, 'onForeground')
+        }
+    }
+
+    /** The app is not in the foreground: no network access for retries until {@link onForeground}. */
+    onBackground(): void {
+        try {
+            this.foreground = false
+            this.stopRetry()
+        }
+        catch (err) {
+            this.logError(err as Error, 'onBackground')
+        }
+    }
+
+    /**
+     * Resets the backoff of the foreground retries and tries the saved address of every computer
+     * without a session now (Routes page and sharing settings call this when they open). Does
+     * nothing while the app is in the background or when nothing is paired.
+     */
+    retryNow(): void {
+        try {
+            if (!this.canRetry())
+                return
+            clearTimeout(this.retry.timer)
+            this.retry.timer = undefined
+            this.retry.attempt = -1
+            if (!this.retry.running)
+                this.retry.timer = setTimeout(() => this.onRetryTimer(), 0)
+        }
+        catch (err) {
+            this.logError(err as Error, 'retryNow')
         }
     }
 
@@ -317,6 +366,7 @@ export class LocalLinkClientService extends IncyclistService {
             await this.media.release(linkId)
             await this.store.remove(linkId)
             this.mismatched.delete(linkId)
+            this.stopRetryIfDone()
             for (const computer of this.discovered.values()) {
                 if (computer.linkId === linkId)
                     delete computer.linkId
@@ -449,6 +499,7 @@ export class LocalLinkClientService extends IncyclistService {
         try {
             this.browse?.cancel()
             this.pairingFlow.cancel()
+            this.stopRetry()
             for (const linkId of [...this.reconnects.keys()])
                 this.cancelReconnect(linkId)
             for (const linkId of [...this.sessions.keys()])
@@ -814,6 +865,7 @@ export class LocalLinkClientService extends IncyclistService {
         }
         const active: ActiveSession = { conn, info, intentional: false }
         this.sessions.set(link.linkId, active)
+        this.stopRetryIfDone()
         conn.on('message', msg => this.onPush(link.linkId, msg))
         conn.on('close', () => this.onSessionClosed(link.linkId, active))
         conn.listen()
@@ -856,8 +908,10 @@ export class LocalLinkClientService extends IncyclistService {
             this.sessions.delete(linkId)
             this.emit('session-changed', { linkId, session: undefined })
             this.emitState()
-            if (!active.intentional)
+            if (!active.intentional) {
                 this.scheduleReconnect(linkId)
+                this.startRetry()
+            }
         }
         catch (err) {
             this.logError(err as Error, 'onSessionClosed')
@@ -896,6 +950,114 @@ export class LocalLinkClientService extends IncyclistService {
     protected cancelReconnect(linkId: string): void {
         clearTimeout(this.reconnects.get(linkId)?.timer)
         this.reconnects.delete(linkId)
+    }
+
+    // --- foreground retries of the saved address ---
+
+    /** Computers that have a record, no session and are not known to speak another protocol version. */
+    protected getRetryTargets(): LinkRecord[] {
+        return this.store.getAll().filter(l => !this.sessions.has(l.linkId) && !this.mismatched.has(l.linkId))
+    }
+
+    protected canRetry(): boolean {
+        return this.foreground && this.isSupported() && this.getRetryTargets().length > 0
+    }
+
+    /** Schedules the first retry (backoff from the start) unless one is already scheduled or running. */
+    protected startRetry(): void {
+        try {
+            if (this.retry.timer || this.retry.running || !this.canRetry())
+                return
+            this.retry.attempt = 0
+            this.scheduleRetry()
+        }
+        catch (err) {
+            this.logError(err as Error, 'startRetry')
+        }
+    }
+
+    /** A check (open of the settings, "check again") has just tried everything: the backoff starts over. */
+    protected restartRetryBackoff(): void {
+        try {
+            this.retry.attempt = 0
+            if (!this.retry.running)
+                this.scheduleRetry()
+        }
+        catch (err) {
+            this.logError(err as Error, 'restartRetryBackoff')
+        }
+    }
+
+    protected scheduleRetry(): void {
+        try {
+            clearTimeout(this.retry.timer)
+            this.retry.timer = undefined
+            if (!this.canRetry())
+                return
+            const delays = BACKGROUND_RECONNECT_DELAYS_MS
+            const delay = delays[Math.min(Math.max(this.retry.attempt, 0), delays.length - 1)]
+            this.retry.timer = setTimeout(() => this.onRetryTimer(), delay)
+        }
+        catch (err) {
+            this.logError(err as Error, 'scheduleRetry')
+        }
+    }
+
+    protected stopRetry(): void {
+        clearTimeout(this.retry.timer)
+        this.retry.timer = undefined
+    }
+
+    protected stopRetryIfDone(): void {
+        try {
+            if (!this.canRetry())
+                this.stopRetry()
+        }
+        catch (err) {
+            this.logError(err as Error, 'stopRetryIfDone')
+        }
+    }
+
+    /** true while a ride, a device scan, a device pairing, a search or a computer pairing is running */
+    protected isNetworkBusy(): boolean {
+        return this.getBusyReason() !== undefined || this.pairingFlow.getState().step !== 'idle'
+    }
+
+    protected onRetryTimer(): void {
+        try {
+            this.retry.timer = undefined
+            if (this.retry.running || !this.canRetry())
+                return
+            if (this.isNetworkBusy()) {
+                // not now: the attempt is skipped, the backoff continues
+                this.retry.attempt++
+                this.scheduleRetry()
+                return
+            }
+            this.retry.running = true
+            this.runRetry().catch(err => this.logError(err as Error, 'onRetryTimer'))
+        }
+        catch (err) {
+            this.retry.running = false
+            this.logError(err as Error, 'onRetryTimer')
+        }
+    }
+
+    /** One attempt on the saved addresses; never browses. Never rejects. */
+    protected async runRetry(): Promise<void> {
+        try {
+            await this.ready()
+            for (const link of this.getRetryTargets())
+                await this.connectKnown(link)
+        }
+        catch (err) {
+            this.logError(err as Error, 'runRetry')
+        }
+        finally {
+            this.retry.running = false
+            this.retry.attempt++
+            this.scheduleRetry()
+        }
     }
 
     // --- pairing ---
@@ -938,6 +1100,7 @@ export class LocalLinkClientService extends IncyclistService {
         this.emitState()
         // the pairing connection is unsigned: the session needs its own authenticated connection
         this.ensureSession(record.linkId).catch(err => this.logError(err, 'savePaired'))
+        this.startRetry()
         return undefined
     }
 

@@ -25,6 +25,12 @@ export const MEDIA_TOKEN_MARGIN_MS = 5 * 60_000
 /** Delays of the reconnect attempts after an established session was lost (no browse involved). */
 export const RECONNECT_DELAYS_MS = [1000, 3000, 10_000]
 
+/**
+ * Delays between the foreground retries of the saved address of a computer without an open
+ * session (no browse involved). The last delay repeats until a session is open.
+ */
+export const BACKGROUND_RECONNECT_DELAYS_MS = [5000, 15_000, 30_000, 60_000]
+
 export const MAX_LOCAL_NAME_LENGTH = 40
 export const DEFAULT_PHONE_NAME = 'Phone'
 export const MAX_FRAME_BYTES = 64 * 1024
