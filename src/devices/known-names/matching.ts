@@ -1,10 +1,13 @@
 import { KNOWN_DEVICE_NAMES } from './known-device-names'
 
 // a purely numeric part, or one that only consists of hex digits and contains a digit, is part of a serial number
-const isDeviceId = (part: string): boolean => /^[0-9]+$/.test(part) || (/^[0-9a-f]+$/.test(part) && /[0-9]/.test(part))
+const isDeviceId = (part: string): boolean => /^\d+$/.test(part) || (/^[\da-f]+$/.test(part) && /\d/.test(part))
 
 // "assiomapro09885l" -> "assiomapro", "d2ride2121" -> "d2ride": everything from a run of 4+ digits on is a serial number
-const cutSerialNumber = (part: string): string => part.replace(/[0-9]{4,}.*$/, '')
+const cutSerialNumber = (part: string): string => {
+    const start = part.search(/\d{4}/)
+    return start < 0 ? part : part.slice(0, start)
+}
 
 /**
  * Splits a device name into lower case parts. Per-device suffixes (serial numbers, MAC fragments such as "4d13",
