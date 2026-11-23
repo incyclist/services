@@ -8,6 +8,7 @@ export type * from './base/model/types'
 export type * from './base/parsers/types'
 export type * from './library/types'
 export type * from './video-availability/types'
+export type * from './sharing/types'
 
 
 export type RouteImportStatus = 'idle' | 'parsing' | 'error' | 'success'

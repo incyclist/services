@@ -169,6 +169,8 @@ export class RouteDownloadService extends IncyclistService {
             if (!info) {
                 const logInfo = {...route.description}
                 delete logInfo.points
+                // the ids of the paired computers do not belong into the (remote) log
+                delete logInfo.linkSources
                 this.logEvent({message:'no URL specified',logInfo})                
                 return {error:'no URL specified'};
             }

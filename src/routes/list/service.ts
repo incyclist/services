@@ -14,9 +14,9 @@ import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard } from "./cards/RouteCard";
 import { RouteSettings, SummaryCardDisplayProps } from "./cards/types";
-import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteListSortOrder, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
+import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteAddSource, RouteListLog, RouteListSortOrder, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
-import { valid } from "../../utils/valid";
+import { isPositive, valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
@@ -38,6 +38,8 @@ import { usePreviewStore } from "../previews/store";
 import { useRouteShapeStore } from "../shapes/store";
 import type { RouteShape } from "../shapes/types";
 import { useRouteLibraryScanner } from "../library/service";
+import { useRouteSharingClient } from "../sharing/client/service";
+import type { DescriptorTrigger } from "../sharing/client/types";
 import { useIncyclistRoutesApi } from "../base/api/factory";
 import { pascalCase } from "../../utils";
 import { useFreeRideService } from "../free-ride";
@@ -733,7 +735,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
 
-    async getRouteDetails(id:string, expectLocal=false):Promise<RouteDetailUIItem> {
+    async getRouteDetails(id:string, expectLocal=false, trigger:DescriptorTrigger='details'):Promise<RouteDetailUIItem> {
         try {
             const route = this.getVisibleRoutes().find( r => r.description.id===id)
             if (!route) 
@@ -744,7 +746,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
 
             if (!route.details) {
-                await this.loadRouteDetails(route, id);
+                await this.loadRouteDetails(route, id, trigger);
             }
 
             this.backfillRouteShape(route)
@@ -780,7 +782,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      */
     requestRouteDetails(id:string, onResult:(details?:RouteDetailUIItem)=>void):()=>void {
         try {
-            this.detailsQueue ??= new RouteDetailsQueue<RouteDetailUIItem>( (routeId:string) => this.getRouteDetails(routeId) )
+            this.detailsQueue ??= new RouteDetailsQueue<RouteDetailUIItem>( (routeId:string) => this.getRouteDetails(routeId, false, 'list') )
             return this.detailsQueue.request(id, onResult)
         }
         catch(err) {
@@ -1081,20 +1083,151 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * @param source Whether the addition originated from a user action or the system.
      */
 
-    public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
+    public addRoute(route:Route,source:RouteAddSource='system'):void {
+        try {
+            if (this.addRouteToLists(route,source))
+                this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+            this.emit('routes-added')
+        }
+        catch(err:any) {
+            this.logError(err,'addRoute')
+        }
+    }
+
+    /**
+     * Adds many routes with one `updated` event. A route that is already known is refreshed in
+     * place (and its card told to redraw).
+     */
+    public addRoutes(routes:Array<Route>, source:RouteAddSource='system'):void {
+        try {
+            let added = false
+            routes.forEach( route => {
+                const known = this.getRoute(route.description.id)
+                added = this.addRouteToLists(route,source) || added
+                if (known)
+                    this.findCard(known)?.card?.emitUpdate()
+            })
+            if (added)
+                this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+            this.emit('routes-added')
+        }
+        catch(err:any) {
+            this.logError(err,'addRoutes')
+        }
+    }
+
+    /** Persists the description (and the details, if the route has them) of a route. A failure is logged, never thrown. */
+    public async saveRoute(route:Route, enforceDetails:boolean=false):Promise<void> {
+        try {
+            await this.db.save(route, enforceDetails)
+        }
+        catch(err:any) {
+            this.logError(err,'saveRoute')
+        }
+    }
+
+    /**
+     * Sets the `linkSources` marker of routes (the paired computers that offer the route's video).
+     * Only that field of the description changes: the details of a route are not loaded or written,
+     * a route whose marker is unchanged is not touched, and the descriptions are persisted with one
+     * write. No card is updated: the caller refreshes the availability of the routes it knows changed.
+     * A failure is logged, never thrown.
+     *
+     * @returns the number of routes that were changed
+     */
+    public updateLinkSources(updates:Array<{id:string, linkSources:string[]}>):number {
+        try {
+            const changed:Array<Route> = []
+            const byId = new Map(this.routes.map( r=>[r.description?.id,r] as const))
+            for (const {id,linkSources} of updates) {
+                const route = byId.get(id)
+                if (!route)
+                    continue
+                const current = route.description.linkSources ?? []
+                if (current.length===linkSources.length && current.every( (l,i)=>l===linkSources[i]))
+                    continue
+                if (linkSources.length>0)
+                    route.description.linkSources = [...linkSources]
+                else
+                    delete route.description.linkSources
+                changed.push(route)
+            }
+            if (changed.length>0)
+                this.db.saveDescriptions(changed)
+            return changed.length
+        }
+        catch(err:any) {
+            this.logError(err,'updateLinkSources')
+            return 0
+        }
+    }
+
+    /**
+     * Removes a route that was created from a computer's catalog: its description, details and card.
+     * No user setting or file of the user is touched.
+     *
+     * @returns false if the route could not be removed (logged, never thrown)
+     */
+    public async removeSharedRoute(route:Route):Promise<boolean> {
+        try {
+            const id = route.description.id
+            const current = this.routes.find( r=>r.description?.id===id)
+            if (current && !current.description?.linkShared)
+                return false
+            const card = this.findCard(id)?.card
+            if (card) {
+                await card.delete({enforced:true,source:'system'}).wait()
+                return true
+            }
+            await this.db.delete(route)
+            this.forgetRoute(id)
+            return true
+        }
+        catch(err:any) {
+            this.logError(err,'removeSharedRoute')
+            return false
+        }
+    }
+
+    protected updateCountryIfMissing(route:Route):void {
+        if (route.description.country || !isPositive(route.points?.length))
+            return
+
+        this.logEvent({message:'route update required (country)',route:route.title})
+        route.updateCountryFromPoints()
+            .then( (updated)=> {
+                if (updated) {
+                    this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                    const saved = this.db.save(route,false)
+                    const cardInfo = this.findCard(route)
+                    cardInfo?.card?.emitUpdate()
+                    return saved
+                }
+            })
+            .catch( err=>{ this.logError(err,'addRoute') })
+    }
+
+    /** @returns true if the lists changed and an `updated` event is due */
+    protected addRouteToLists(route:Route,source:RouteAddSource):boolean {
         // route already present
-        const existing = source==='system' ? this.getRoute(route.description.id) :
-            this.routes.find( r=>r.description?.id===route.description.id)
-           
+        // tombstoned routes are part of the lookup: a route of the user must never be shadowed or duplicated
+        const existing = this.routes.find( r=>r.description?.id===route.description.id && (source!=='system' || !r.description?.isDeleted || !!route.description?.linkShared))
+
+        // a route created from a paired computer's catalog never touches a route that is not such a placeholder
+        if (existing && route.description?.linkShared && !existing.description?.linkShared)
+            return false
 
         if (existing ) {
             const wasDeleted = existing.description?.isDeleted
+            // the real route arrived after its placeholder: nothing of the placeholder (details, source) may stay
+            if (existing.description?.linkShared && !route.description?.linkShared)
+                existing.details = undefined
             existing.replace(route)
 
             // a system update refreshes a route in place; an explicit user import must also
             // leave the route visible - revive a tombstoned route or one whose card is detached
             if (source==='system' || (!wasDeleted && this.hasAttachedCard(existing))) {
-                return;
+                return false
             }
             route = existing
         }
@@ -1102,7 +1235,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.routes.push(route)
         }
         if (route.description?.isDeleted) {
-            return
+            return false
         }
 
         if (!route.description?.isDeleted) {
@@ -1110,20 +1243,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
             }
 
-            if (!route.description.country && route.points?.length>0) {
-                this.logEvent({message:'route update required (country)',route:route.title})
-                route.updateCountryFromPoints()
-                    .then( (updated)=> {
-                        if (updated) {
-                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
-                            const saved = this.db.save(route,false)
-                            const cardInfo = this.findCard(route)
-                            cardInfo?.card?.emitUpdate()
-                            return saved
-                        }
-                    })
-                    .catch( err=>{ this.logError(err,'addRoute') })
-            }
+            this.updateCountryIfMissing(route)
         }
 
         const list = this.selectList(route)
@@ -1137,8 +1257,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if ( list.getId()==='myRoutes')
             card.enableDelete(true)    
         
-        this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
-
+        return true
     }
 
     /**
@@ -1333,8 +1452,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const observer = this.api.loadServer(key)
             observer.on('route.added', this.addFromApi.bind(this))
             observer.on('route.updated', this.update.bind(this))
-            observer.once('done', ()=>{ done() })
-            observer.once('stopped', ()=>{ done() })
+            observer.once('done', ()=>{ this.emit('api-reload-done'); done() })
+            observer.once('stopped', ()=>{ this.emit('api-reload-done'); done() })
         })
     }
 
@@ -2236,6 +2355,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 if (isCompleted)
                     return
                 isCompleted = true
+                this.emit('api-reload-done')
                 done()
             }
 
@@ -2249,11 +2369,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
 
-    protected async loadRouteDetails(route: Route, id: string) {
+    protected async loadRouteDetails(route: Route, id: string, trigger:DescriptorTrigger='details') {
         route.details = await this.db.getDetails(id);
 
+        // created from a paired computer's catalog: the details come from that computer, never from an API
+        if (!route.details && route.description.linkShared) {
+            await this.loadSharedRouteDetails(route, trigger)
+        }
+
         // not in DB yet? must come from external app or API 
-        if (!route.details) {
+        else if (!route.details) {
 
             if (route.description.source) {
                 await this.loadSyncedRouteDetails(route);
@@ -2275,6 +2400,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 route.details.video.selectableSegments = route.details.selectableSegments;
                 delete route.details.selectableSegments;
             }
+        }
+    }
+
+    /** A computer that can not be reached leaves the details absent: the summary stays, the route can not be started. */
+    protected async loadSharedRouteDetails(route: Route, trigger:DescriptorTrigger='details') {
+        try {
+            await this.getRouteSharingClient().loadDescriptor(route, trigger)
+        }
+        catch {
+            // already logged by the client
         }
     }
 
@@ -2450,12 +2585,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const outDir = path.join( appInfo.getAppDir(),'previewImg')
         await fs.ensureDir(outDir)
 
+        // without a video there is nothing to look next to and nothing to take a screenshot of
+        if (!videoUrl)
+            return;
+
         const existing = await this.checkExistingPreviewFiles(descr)
         if (existing)
             return existing
-
-        if (!videoUrl)
-            return;
 
         if (!await this.getPreviewStore().isScreenshotAllowed(descr))
             return;
@@ -2748,6 +2884,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getUserSettings () {
         return useUserSettings()
+    }
+
+    @Injectable
+    protected getRouteSharingClient() {
+        return useRouteSharingClient()
     }
 
     @Injectable

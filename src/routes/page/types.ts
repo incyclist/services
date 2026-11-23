@@ -4,6 +4,8 @@ import { ImportDisplayProps, IObserver, RouteImportStatus } from "../../types";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { DisplayType, SearchFilter, SearchFilterOptions } from "../list/types";
 import { RouteVideoStatus, VideoKeepChoice } from "../video-availability/types";
+import type { RouteAvailabilityProps } from "../sharing/client/types";
+import type { ThumbnailLinkSource } from "../thumbnails/types";
 
 
 
@@ -27,7 +29,14 @@ export interface RoutePageDisplayProps  {
 // nothing to show, which is always the case on platforms without the fileAccess binding) lives on
 // SummaryCardDisplayProps itself (architecture.md §3.7.1: real RouteCard state, not a page-only
 // addition), so this is a plain alias.
-export type RouteItemProps = SummaryCardDisplayProps
+//
+// Where the route can be played from (`availability`, `sourceLabel`, `unavailableReason`) is derived
+// from cached state only. The props are absent while route sharing is not available, except on
+// routes that exist only because a computer shares them. `sourceLabel` is one display name, never a count.
+//
+// `thumbnailLink` is present on routes that exist only because a computer shares them: it tells the
+// thumbnail cache which computer (and which handle) the thumbnail can be fetched from.
+export type RouteItemProps = SummaryCardDisplayProps & Partial<RouteAvailabilityProps> & { thumbnailLink?: ThumbnailLinkSource }
 
 
 export interface IPageCallBacks  {
@@ -64,6 +73,10 @@ export interface IRoutePageService extends IPageService, IPageCallBacks {
     onVideoRemoveDismissed(routeId: string): void
     onConfirmAccess(routeId: string): Promise<void>
 
+    // ---- local copy ---------------------------------------------------------
+    /** Removes the video copy on this device only; the route stays (unlike the list's delete). */
+    deleteLocalCopy(routeKey: string): Promise<boolean>
+
     // ---- Downloads list rows ------------------------------------------------
     onDownloadStop(routeId: string): void
     onDownloadRetry(routeId: string): void
@@ -88,6 +101,12 @@ export interface RouteDetailsProps {
     // buttons apply, and the confirmation dialogs. Absent when the platform has no fileAccess
     // binding, in which case the dialog renders exactly as before.
     video?:          RouteVideoDisplayProps
+    /** Same contract as on the list items (`RouteItemProps`). */
+    availability?:      RouteAvailabilityProps['availability']
+    sourceLabel?:       string
+    unavailableReason?: RouteAvailabilityProps['unavailableReason']
+    /** Where the thumbnail of a route that only a computer shares can be fetched from. */
+    thumbnailLink?:     ThumbnailLinkSource
 }
 
 /** Resolved video state for one route - the UI renders this as-is and forwards the actions. */

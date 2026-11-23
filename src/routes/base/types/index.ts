@@ -144,6 +144,18 @@ export interface    RouteInfo extends RouteBase{
     apiServer?:string,
     isLoopVerified?:boolean
     sourceTreeUri?: string
+    /**
+     * Created on this device from the catalog of a paired computer; the details arrive lazily when
+     * the route is first opened, ridden or copied.
+     */
+    linkShared?: boolean
+    /**
+     * The `linkId`s of the paired computers whose catalog offers this route's video. Written by the
+     * route sharing sync into the description (never by the user, never derived from the API), so
+     * the list can tell where a route's video can come from without loading its details.
+     * Absent or empty: no computer offers it.
+     */
+    linkSources?: string[]
 }
 
 

@@ -1,7 +1,10 @@
+import { EventEmitter } from 'node:events'
 import { Inject } from '../../base/decorators'
 import { RoutesPageService } from './service'
+import { RouteVideoResolver } from '../sharing/client/resolver'
 import { RouteCard } from '../list/cards/RouteCard'
 import { Route } from '../base/model/route'
+import { Observer } from '../../base/types/observer'
 import { MobileWorkoutListPageService } from '../../workouts/page/mobile/service'
 
 // Session 2.2 (workout-combo-service-design.md §3.5, §3.8) - RoutesPageService's cross-visibility
@@ -937,6 +940,472 @@ describe('RoutesPageService',()=>{
             ;(service as any).subscribeAllActiveDownloads()
 
             expect((service as any).downloadCache.get('r1')?.status).toBe('done')
+        })
+    })
+
+    describe('route source availability', () => {
+        let s, service
+        let resolver, sharing, card, routeList
+        const links = new Map([['A', { displayName: 'Den PC' }]])
+        const item = (id: string, extra = {}) => ({ id, title: id, loaded: false, ...extra }) as any
+
+        beforeEach(() => {
+            setupMocks()
+            resolver = {
+                isAvailable: jest.fn().mockReturnValue(true),
+                getLinkSnapshot: jest.fn().mockReturnValue(links),
+                getRouteAvailability: jest.fn((route: any) => route.linkShared
+                    ? { canStart: false, availability: 'unavailable', unavailableReason: 'linkUnreachable', sourceLabel: 'Den PC' }
+                    : { canStart: true, availability: 'local' }),
+            }
+            sharing = { loadDescriptor: jest.fn().mockResolvedValue(undefined), on: jest.fn(), off: jest.fn() }
+            card = { canDelete: jest.fn().mockReturnValue(true), delete: jest.fn(), hasLocalCopy: jest.fn().mockReturnValue(false), deleteDownload: jest.fn().mockResolvedValue(undefined), getAvailability: jest.fn().mockReturnValue({ canStart: true, availability: 'fromLink', sourceLabel: 'Den PC', linkId: 'A' }), getData: jest.fn().mockReturnValue({ description: { linkShared: true } }) }
+            routeList = { getCard: jest.fn().mockReturnValue(card), getSelected: jest.fn(), close: jest.fn(), getStartSettings: jest.fn().mockReturnValue({}) }
+            Inject('VideoResolver', resolver)
+            Inject('SharingClient', sharing)
+            Inject('RouteList', routeList)
+            s = service = new RoutesPageService()
+            s.logError = jest.fn()
+            s.updatePageDisplay = jest.fn()
+        })
+
+        afterEach(() => {
+            resetMocks()
+            Inject('VideoResolver', null)
+            Inject('SharingClient', null)
+            Inject('RouteList', null)
+            s.reset()
+        })
+
+        const setRoutes = (routes: unknown[]) => { s.serviceState = { routes } }
+
+        test('every route carries availability, sourceLabel and unavailableReason from the resolver, read from one snapshot', () => {
+            setRoutes([item('a'), item('b', { linkShared: true })])
+            const res = s.getRoutesDisplayProps()
+            expect(res[0]).toMatchObject({ id: 'a', availability: 'local' })
+            expect(res[0]).not.toHaveProperty('sourceLabel')
+            expect(res[1]).toMatchObject({ id: 'b', availability: 'unavailable', unavailableReason: 'linkUnreachable', sourceLabel: 'Den PC' })
+            expect(resolver.getLinkSnapshot).toHaveBeenCalledTimes(1)
+            expect(resolver.getRouteAvailability).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }), { hasDetails: false, links })
+        })
+
+        test('without route sharing only linkShared routes are decorated and the others keep their identity', () => {
+            resolver.isAvailable.mockReturnValue(false)
+            const plain = item('a')
+            setRoutes([plain, item('b', { linkShared: true })])
+            const res = s.getRoutesDisplayProps()
+            expect(res[0]).toBe(plain)
+            expect(res[1]).toMatchObject({ availability: 'unavailable' })
+        })
+
+        test('without route sharing and without linkShared routes the list is returned as it is', () => {
+            resolver.isAvailable.mockReturnValue(false)
+            const routes = [item('a')]
+            setRoutes(routes)
+            expect(s.getRoutesDisplayProps()).toBe(routes)
+            expect(resolver.getLinkSnapshot).not.toHaveBeenCalled()
+        })
+
+        test('an unchanged route keeps its identity between renders, a changed one does not', () => {
+            const a = item('a', { linkShared: true })
+            setRoutes([a])
+            const first = s.getRoutesDisplayProps()[0]
+            expect(s.getRoutesDisplayProps()[0]).toBe(first)
+
+            resolver.getRouteAvailability.mockReturnValue({ canStart: true, availability: 'fromLink', sourceLabel: 'Den PC' })
+            const changed = s.getRoutesDisplayProps()[0]
+            expect(changed).not.toBe(first)
+            expect(changed).toMatchObject({ availability: 'fromLink' })
+        })
+
+        test('a non-shared route without markers is neutral, loaded or not (real resolver)', () => {
+            Inject('SharingClient', { ...sharing, getRowsForRoute: jest.fn().mockReturnValue([]) })
+            Inject('LocalLinkClient', { isSupported: () => true, getDisplayProps: () => ({ links: [] }), getSession: () => undefined })
+            const real = new RouteVideoResolver()
+            resolver.getRouteAvailability.mockImplementation((route: any, opts: any) => real.getRouteAvailability(route, opts))
+            for (const loaded of [false, true]) {
+                setRoutes([item('o', { hasVideo: true, loaded })])
+                const res = s.getRoutesDisplayProps()
+                expect(res[0]).toMatchObject({ id: 'o', availability: 'remote' })
+                expect(res[0]).not.toHaveProperty('unavailableReason')
+                expect(res[0]).not.toHaveProperty('sourceLabel')
+            }
+            Inject('LocalLinkClient', null)
+        })
+
+        describe('a computer comes or goes', () => {
+            const stubCard = () => {
+                let key: string | undefined
+                return {
+                    setAvailabilityProps: jest.fn((p: unknown) => { const k = JSON.stringify(p); const changed = k !== key; key = k; return changed }),
+                    emitUpdate: jest.fn(),
+                }
+            }
+
+            test('only the card of the route whose availability changed is updated, the page is not rendered again', () => {
+                const cards: Record<string, ReturnType<typeof stubCard>> = { a: stubCard(), b: stubCard(), c: stubCard() }
+                routeList.getCard.mockImplementation((id: string) => cards[id])
+                setRoutes([item('a'), item('b', { linkShared: true }), item('c', { linkShared: true })])
+                const state = { b: 'unavailable', c: 'unavailable' }
+                resolver.getRouteAvailability.mockImplementation((route: any) => route.linkShared
+                    ? { canStart: false, availability: state[route.id], unavailableReason: 'linkUnreachable', sourceLabel: 'Den PC' }
+                    : { canStart: true, availability: 'local' })
+
+                s.refreshLinkAvailability()
+                Object.values(cards).forEach(c => c.emitUpdate.mockClear())
+
+                // nothing changed: nobody is told
+                s.onLinkStateChanged()
+                Object.values(cards).forEach(c => expect(c.emitUpdate).not.toHaveBeenCalled())
+
+                // the computer that has route b comes back
+                state.b = 'fromLink'
+                s.onLinkStateChanged()
+                expect(cards.b.emitUpdate).toHaveBeenCalledTimes(1)
+                expect(cards.a.emitUpdate).not.toHaveBeenCalled()
+                expect(cards.c.emitUpdate).not.toHaveBeenCalled()
+                expect(cards.b.setAvailabilityProps).toHaveBeenLastCalledWith(expect.objectContaining({ availability: 'fromLink' }))
+                expect(s.updatePageDisplay).not.toHaveBeenCalled()
+            })
+
+            test('a card that throws does not stop the others', () => {
+                const bad = stubCard()
+                bad.setAvailabilityProps.mockImplementation(() => { throw new Error('boom') })
+                const good = stubCard()
+                routeList.getCard.mockImplementation((id: string) => id === 'x' ? bad : good)
+                setRoutes([item('x', { linkShared: true }), item('y', { linkShared: true })])
+                expect(() => s.onLinkStateChanged()).not.toThrow()
+                expect(good.emitUpdate).toHaveBeenCalledTimes(1)
+            })
+
+            test('the list props keep the card in step without telling it', () => {
+                const card2 = stubCard()
+                routeList.getCard.mockReturnValue(card2)
+                setRoutes([item('b', { linkShared: true })])
+                s.getRoutesDisplayProps()
+                expect(card2.setAvailabilityProps).toHaveBeenCalledWith(expect.objectContaining({ availability: 'unavailable' }))
+                expect(card2.emitUpdate).not.toHaveBeenCalled()
+            })
+        })
+
+        test('a changed marker of a route description reaches its card (the page state may still hold the old one)', () => {
+            const cardA = {
+                setAvailabilityProps: jest.fn().mockReturnValue(true), emitUpdate: jest.fn(),
+                getRouteDescription: jest.fn().mockReturnValue({ id: 'a', hasVideo: true, requiresDownload: true }),
+            }
+            routeList.getCard.mockReturnValue(cardA)
+            setRoutes([item('a', { requiresDownload: true, linkSources: ['A'] })])
+            s.onLinkStateChanged()
+            expect(resolver.getRouteAvailability).toHaveBeenCalledWith(expect.not.objectContaining({ linkSources: expect.anything() }), expect.anything())
+            expect(cardA.emitUpdate).toHaveBeenCalledTimes(1)
+            expect(s.updatePageDisplay).not.toHaveBeenCalled()
+        })
+
+        test('2000 routes are prepared from their markers: no per-route row scan, no details', () => {
+            const rows = jest.fn().mockReturnValue([])
+            Inject('SharingClient', { ...sharing, getRowsForRoute: rows })
+            Inject('LocalLinkClient', {
+                isSupported: () => true,
+                getDisplayProps: () => ({ links: [{ linkId: 'A', displayName: 'Den PC', mediaAvailable: true, lastSeenAt: 1, reachability: 'reachable' }] }),
+                getSession: (linkId: string) => linkId === 'A' ? { capabilities: [] } : undefined,
+            })
+            const real = new RouteVideoResolver()
+            resolver.getRouteAvailability.mockImplementation((route: any, opts: any) => real.getRouteAvailability(route, opts))
+            resolver.getLinkSnapshot.mockImplementation(() => real.getLinkSnapshot())
+            const details = jest.fn()
+            routeList.getRoute = details
+            routeList.getRouteDetails = details
+            routeList.requestRouteDetails = details
+            const routes = Array.from({ length: 2000 }, (_v, i) => item(`r${i}`, i % 2 ? { hasVideo: true, requiresDownload: true, linkSources: ['A'] } : { hasVideo: true, requiresDownload: true }))
+            setRoutes(routes)
+
+            const res = s.getRoutesDisplayProps()
+
+            expect(res[1]).toMatchObject({ availability: 'fromLink', sourceLabel: 'Den PC' })
+            expect(res[0]).toMatchObject({ availability: 'remote' })
+            expect(res[0]).not.toHaveProperty('sourceLabel')
+            expect(rows).not.toHaveBeenCalled()
+            expect(details).not.toHaveBeenCalled()
+            expect(resolver.getLinkSnapshot).toHaveBeenCalledTimes(1)
+            Inject('LocalLinkClient', null)
+        })
+
+        test('a failure in the availability check leaves the list as it is', () => {
+            const routes = [item('a')]
+            setRoutes(routes)
+            resolver.getLinkSnapshot.mockImplementation(() => { throw new Error('boom') })
+            expect(s.getRoutesDisplayProps()).toBe(routes)
+        })
+
+        test('linkShared routes carry the thumbnail source of a computer, others do not', () => {
+            const link = { linkId: 'A', thumbHandle: 't1' }
+            resolver.getThumbnailLink = jest.fn().mockReturnValue(link)
+            setRoutes([item('a'), item('b', { linkShared: true })])
+            const res = s.getRoutesDisplayProps()
+            expect(res[0]).not.toHaveProperty('thumbnailLink')
+            expect(res[1].thumbnailLink).toEqual(link)
+            expect(s.getRoutesDisplayProps()[1]).toBe(res[1])
+            expect(service.getRouteDetailsProps('b').thumbnailLink).toEqual(link)
+
+            resolver.getThumbnailLink.mockReturnValue({ linkId: 'A', thumbHandle: 't2' })
+            expect(s.getRoutesDisplayProps()[1]).not.toBe(res[1])
+        })
+
+        test('route details carry the same three props', () => {
+            const props = service.getRouteDetailsProps('b')
+            expect(props).toMatchObject({ routeId: 'b', availability: 'fromLink', sourceLabel: 'Den PC' })
+            expect(props).not.toHaveProperty('unavailableReason')
+        })
+
+        test('an open details dialog is told when a computer comes back, and its props change from unavailable to fromLink', () => {
+            const client = new EventEmitter()
+            Inject('LocalLinkClient', client)
+            Inject('VideoAvailability', { on: jest.fn(), off: jest.fn() })
+            Inject('FolderAccess', { on: jest.fn(), off: jest.fn() })
+            try {
+                // the card reports the state of the computer
+                card.getAvailability.mockReturnValue({ canStart: false, availability: 'unavailable', unavailableReason: 'linkUnreachable', sourceLabel: 'Den PC', linkId: 'A' })
+                s.updatePageDisplay = jest.fn()
+                s.pageObserver = new Observer()
+                s.detailRouteId = 'b'
+                s.startEventListener()
+                const updates: string[] = []
+                s.getPageObserver().on('route-details-update', (id: string) => updates.push(id))
+                expect(service.getRouteDetailsProps('b')).toMatchObject({ availability: 'unavailable', unavailableReason: 'linkUnreachable' })
+
+                card.getAvailability.mockReturnValue({ canStart: true, availability: 'fromLink', sourceLabel: 'Den PC', linkId: 'A' })
+                client.emit('session-changed', { linkId: 'A', session: {} })
+
+                expect(updates).toEqual(['b'])
+                expect(s.updatePageDisplay).not.toHaveBeenCalled()
+                const props = service.getRouteDetailsProps('b')
+                expect(props).toMatchObject({ availability: 'fromLink' })
+                expect(props).not.toHaveProperty('unavailableReason')
+
+                client.emit('state-changed', {})
+                sharing.on.mock.calls.find(c => c[0] === 'synced')[1]()
+                expect(updates).toEqual(['b', 'b', 'b'])
+                s.stopEventListener()
+            }
+            finally {
+                Inject('LocalLinkClient', null)
+                Inject('VideoAvailability', null)
+                Inject('FolderAccess', null)
+            }
+        })
+
+        test('a link event without an open details dialog sends no details update', () => {
+            s.updatePageDisplay = jest.fn()
+            s.pageObserver = new Observer()
+            const updates: string[] = []
+            s.getPageObserver().on('route-details-update', (id: string) => updates.push(id))
+            s.onLinkStateChanged()
+            expect(updates).toEqual([])
+            expect(s.updatePageDisplay).not.toHaveBeenCalled()
+        })
+
+        test('route details of a route that does not depend on route sharing carry none while it is not available', () => {
+            resolver.isAvailable.mockReturnValue(false)
+            card.getData.mockReturnValue({ description: {} })
+            expect(service.getRouteDetailsProps('b')).toEqual({ routeId: 'b', attachedWorkout: null })
+        })
+
+        test('onDelete removes the route only if the card offers delete', () => {
+            service.onDelete('a')
+            expect(card.delete).toHaveBeenCalledTimes(1)
+            card.canDelete.mockReturnValue(false)
+            service.onDelete('a')
+            expect(card.delete).toHaveBeenCalledTimes(1)
+        })
+
+        test('deleteLocalCopy removes the copy and not the route', async () => {
+            card.hasLocalCopy.mockReturnValue(true)
+            expect(await service.deleteLocalCopy('a')).toBe(true)
+            expect(card.deleteDownload).toHaveBeenCalledTimes(1)
+            expect(card.delete).not.toHaveBeenCalled()
+            expect(s.updatePageDisplay).toHaveBeenCalled()
+        })
+
+        test('deleteLocalCopy without a copy on this device does nothing', async () => {
+            expect(await service.deleteLocalCopy('a')).toBe(false)
+            routeList.getCard.mockReturnValue(undefined)
+            expect(await service.deleteLocalCopy('a')).toBe(false)
+            expect(card.deleteDownload).not.toHaveBeenCalled()
+        })
+
+        describe('start', () => {
+            const flush = () => new Promise(resolve => setImmediate(resolve))
+            let startRide
+
+            beforeEach(() => { startRide = jest.spyOn(s, 'startRide').mockImplementation(() => undefined) })
+
+            test('a linkShared route without details loads them for the ride before it starts', async () => {
+                const route = new Route({ id: 'b', linkShared: true, hasVideo: true, isLocal: true })
+                routeList.getSelected.mockReturnValue(route)
+                sharing.loadDescriptor.mockImplementation(async (r: Route) => { r.details = {} as never; return r })
+                service.start()
+                expect(startRide).not.toHaveBeenCalled()
+                expect(sharing.loadDescriptor).toHaveBeenCalledWith(route, 'ride')
+                await flush()
+                expect(startRide).toHaveBeenCalledTimes(1)
+            })
+
+            test('the ride does not start when the details can not be loaded', async () => {
+                sharing.loadDescriptor.mockImplementation(async (r: Route) => r)
+                routeList.getSelected.mockReturnValue(new Route({ id: 'b', linkShared: true }))
+                service.start()
+                await flush()
+                expect(startRide).not.toHaveBeenCalled()
+                expect(s.updatePageDisplay).toHaveBeenCalled()
+            })
+
+            test('the ride does not start when loading the details rejects', async () => {
+                sharing.loadDescriptor.mockRejectedValue(new Error('unreachable'))
+                routeList.getSelected.mockReturnValue(new Route({ id: 'b', linkShared: true }))
+                service.start()
+                await flush()
+                expect(startRide).not.toHaveBeenCalled()
+            })
+
+            test('other routes and linkShared routes that have their details start right away', () => {
+                routeList.getSelected.mockReturnValue(new Route({ id: 'x' }))
+                service.start()
+                routeList.getSelected.mockReturnValue(new Route({ id: 'b', linkShared: true }, { id: 'b', title: 'b' } as any))
+                service.start()
+                expect(startRide).toHaveBeenCalledTimes(2)
+                expect(sharing.loadDescriptor).not.toHaveBeenCalled()
+            })
+        })
+
+        test('page updates follow the sessions and the sync of the computers', () => {
+            const client = { on: jest.fn(), off: jest.fn() }
+            Inject('LocalLinkClient', client)
+            try {
+                const video = { on: jest.fn(), off: jest.fn() }
+                Inject('VideoAvailability', video)
+                Inject('FolderAccess', { on: jest.fn(), off: jest.fn() })
+                s.startEventListener()
+                expect(client.on).toHaveBeenCalledWith('session-changed', expect.any(Function))
+                expect(client.on).toHaveBeenCalledWith('state-changed', expect.any(Function))
+                expect(sharing.on).toHaveBeenCalledWith('synced', expect.any(Function))
+                s.stopEventListener()
+                expect(client.off).toHaveBeenCalledWith('session-changed', expect.any(Function))
+                expect(sharing.off).toHaveBeenCalledWith('synced', expect.any(Function))
+            }
+            finally {
+                Inject('LocalLinkClient', null)
+                Inject('VideoAvailability', null)
+                Inject('FolderAccess', null)
+            }
+        })
+    })
+
+    describe('retryLinks', () => {
+        let s
+        beforeEach(() => {
+            setupMocks()
+            s = new RoutesPageService()
+            s.logError = jest.fn()
+        })
+        afterEach(() => {
+            resetMocks()
+            Inject('LocalLinkClient', null)
+            s.reset()
+        })
+
+        test('asks the computers client to try the saved addresses now', () => {
+            const client = { retryNow: jest.fn() }
+            Inject('LocalLinkClient', client)
+            s.retryLinks()
+            expect(client.retryNow).toHaveBeenCalledTimes(1)
+        })
+
+        test('a failing client does not throw', () => {
+            Inject('LocalLinkClient', { retryNow: jest.fn(() => { throw new Error('boom') }) })
+            expect(() => s.retryLinks()).not.toThrow()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'retryLinks')
+        })
+    })
+
+    describe('route list updates', () => {
+        let s
+        let observer: Observer
+        let list: any
+        let filters: any
+        const item = (id: string) => ({ id, title: id, loaded: false }) as any
+
+        beforeEach(() => {
+            setupMocks()
+            observer = new Observer()
+            filters = { title: 'x' }
+            list = {
+                routes: [item('a')],
+                searchRepo: jest.fn(() => ({ routes: [...list.routes], filters, observer })),
+                isStillLoading: jest.fn().mockReturnValue(false),
+                getDisplayType: jest.fn().mockReturnValue('list'),
+                getFilters: jest.fn(() => filters),
+                getFilterOptions: jest.fn().mockReturnValue({}),
+                getCard: jest.fn(),
+            }
+            Inject('RouteList', list)
+            Inject('VideoResolver', { isAvailable: jest.fn().mockReturnValue(false) })
+            Inject('UserSettings', { getValue: jest.fn((_k: string, d: unknown) => d) })
+            s = new RoutesPageService()
+            s.logError = jest.fn()
+            s.serviceState = list.searchRepo()
+            s.updatePageDisplay = jest.fn()
+        })
+
+        afterEach(() => {
+            resetMocks()
+            Inject('RouteList', null)
+            Inject('VideoResolver', null)
+            Inject('UserSettings', null)
+            s.reset()
+        })
+
+        test('a route added while the page is open appears without a new search, filters and observer stay', () => {
+            const before = s.serviceState
+            list.routes.push(item('b'))
+            s.onStateUpdate({ routes: [item('a'), item('b')], filters: { other: true }, observer: new Observer() })
+
+            expect(s.getPageDisplayProps().routes.map((r: any) => r.id)).toEqual(['a', 'b'])
+            expect(s.serviceState.observer).toBe(before.observer)
+            expect(s.serviceState.filters).toBe(before.filters)
+            expect(s.updatePageDisplay).toHaveBeenCalledTimes(1)
+            expect(list.searchRepo).toHaveBeenCalledTimes(1)
+        })
+
+        test('a payload that is not a search state triggers a search with the current filters, without side effects', () => {
+            list.routes.push(item('b'))
+            s.onStateUpdate({ myRoutes: [] })
+            expect(list.searchRepo).toHaveBeenLastCalledWith(filters)
+            expect(s.getPageDisplayProps().routes.map((r: any) => r.id)).toEqual(['a', 'b'])
+            s.onStateUpdate(undefined)
+            s.onStateUpdate(null)
+            s.onStateUpdate('x')
+            expect(s.updatePageDisplay).toHaveBeenCalledTimes(4)
+        })
+
+        test('the subscriptions are untouched by an update', () => {
+            const on = jest.spyOn(observer, 'on')
+            const off = jest.spyOn(observer, 'off')
+            s.onStateUpdate({ routes: [item('a'), item('b')] })
+            expect(on).not.toHaveBeenCalled()
+            expect(off).not.toHaveBeenCalled()
+        })
+
+        test('a failing search does not throw and still renders', () => {
+            list.searchRepo.mockImplementation(() => { throw new Error('boom') })
+            expect(() => s.onStateUpdate({})).not.toThrow()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onStateUpdate')
+            expect(s.updatePageDisplay).toHaveBeenCalled()
+        })
+
+        test('an update before the page was opened is ignored', () => {
+            s.serviceState = undefined
+            expect(() => s.onStateUpdate({ routes: [item('z')] })).not.toThrow()
+            expect(s.serviceState).toBeUndefined()
         })
     })
 })

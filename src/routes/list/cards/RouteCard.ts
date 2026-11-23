@@ -15,6 +15,8 @@ import { valid } from "../../../utils/valid";
 import { waitNextTick } from "../../../utils";
 import { DownloadObserver } from "../../download/types";
 import { useRouteDownload } from "../../download/service";
+import { useRouteVideoResolver } from "../../sharing/client/resolver";
+import type { LinkSnapshot, RouteAvailability } from "../../sharing/client/types";
 import { EventLogger } from "gd-eventlog";
 import { checkIsLoop, getNextVideoId, hasNextVideo, getPosition, updateSlopes} from "../../base/utils/route";
 import { applySmoothing, getSmoothingGradient, isSmoothingEligible, MAX_SMOOTHING_LEVEL, SmoothingGradient } from "../../base/utils/smoothing";
@@ -76,6 +78,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
     /** iOS/iCloud list badge, cached here so it survives every emitUpdate() snapshot regardless
      *  of who triggers it - see architecture.md §3.7.1. Set only via setVideoPill(). */
     protected videoPill?: VideoListPill
+    protected availabilityProps?: Record<string, unknown>
+    protected availabilityKey?: string
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -102,10 +106,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (!route)
                 return false
 
-            
+            // the video can only come from a computer, and the details must be on this device or loadable from it
+            if (route.linkShared)
+                return this.getAvailability().canStart
 
             if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl?.startsWith('http'))
-                return isOnline
+                return isOnline || (route.hasVideo && this.hasLinkSource(route))
 
             // requiresDownload describes the route, not its current state - it stays true after the
             // video has been downloaded. Without the isDownloaded guard an already-downloaded video
@@ -395,7 +401,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     totalDistance,totalElevation,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver, cntActive:this.cntActive, country:countryISO,
-                    videoPill:this.videoPill, shape:this.getRouteShapeStore().get(descr.id)}
+                    videoPill:this.videoPill, ...this.availabilityProps, shape:this.getRouteShapeStore().get(descr.id)}
         }
         catch(err:any) {
             this.logError(err,'getDisplayProperties')
@@ -454,7 +460,44 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     canDelete() {
-        return this.deleteable
+        try {
+            // a route that exists only because a computer shares it has nothing local to delete (without a local copy)
+            if (this.route?.description?.linkShared && !this.hasLocalCopy())
+                return false
+            return this.deleteable
+        }
+        catch(err:any) {
+            this.logError(err,'canDelete')
+            return false
+        }
+    }
+
+    /**
+     * Where the route can be played from, from cached state only (never a request).
+     *
+     * @param links the state of the computers, when it was already read for a whole list
+     */
+    getAvailability(links?: LinkSnapshot): RouteAvailability {
+        try {
+            return this.getVideoResolver().getRouteAvailability(this.getRouteDescription(), { hasDetails: valid(this.getRouteData()), links })
+        }
+        catch(err:any) {
+            this.logError(err,'getAvailability')
+            // fallback: the route can not be played from anywhere
+            return { canStart: false, availability: 'unavailable', unavailableReason: 'noSource' }
+        }
+    }
+
+    /** true if the video of the route is a file on this device */
+    hasLocalCopy(): boolean {
+        try {
+            const descr = this.route?.description
+            return !!descr?.isDownloaded && !!descr.videoUrl && !descr.videoUrl.startsWith('http')
+        }
+        catch(err:any) {
+            this.logError(err,'hasLocalCopy')
+            return false
+        }
     }
 
 
@@ -486,16 +529,13 @@ export class RouteCard extends BaseCard implements Card<Route> {
             // TODO:  final solution
 
             // temporary fix as long we haven't implemented a local 
-            canStart = canStart && (descr?.isLocal || (!descr.requiresDownload ||descr?.isDownloaded))
+            canStart = canStart && (descr?.isLocal || (!descr.requiresDownload ||descr?.isDownloaded) || this.hasLinkSource(descr))
 
         }
-        else {
-            if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) ) {            
-                canStart = false            
-                videoChecking = true
-                videoMissing = this.isVideoMissing()
-            }
-
+        else if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) && !descr.linkShared ) {
+            canStart = false
+            videoChecking = true
+            videoMissing = this.isVideoMissing()
         }
         
 
@@ -506,7 +546,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const details = this.getRouteData()
         const detailsAvailable = valid(details)
 
-        if (descr?.hasVideo && !descr.videoUrl) {
+        if (descr?.linkShared) {
+            // the video address comes from the computer when the ride starts; availability decides
+            canStart = this.getAvailability().canStart
+        }
+        else if (descr?.hasVideo && !descr.videoUrl) {
             if (!detailsAvailable) {
                 // Without the details there is no way to tell whether the video is reachable, so the
                 // ride cannot be started yet - but it must not be reported as missing either.
@@ -1091,6 +1135,21 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
+    /**
+     * The video of the route was copied to this device (from a computer): from now on the route
+     * plays from the local file, exactly as after a download.
+     *
+     * @param url the `video://` URL of the local file
+     */
+    async onCopiedToDevice( url:string):Promise<void> {
+        try {
+            await this.onDownloadCompleted(url)
+        }
+        catch(err:any) {
+            this.logError(err,'onCopiedToDevice')
+        }
+    }
+
     protected async onDownloadCompleted( url:string) {
         try {
             getRouteList().logEvent({message:'download completed', route:this.route?.description?.title})
@@ -1128,7 +1187,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const descr = this.getRouteDescription()
 
         descr.originalVideoUrl = descr.videoUrl
-        if (!descr.downloadUrl && descr.videoUrl.startsWith('http')) {
+        if (!descr.downloadUrl && descr.videoUrl?.startsWith('http')) {
             descr.downloadUrl = descr.videoUrl;
         }
         this.save().catch( err=>{ this.logError(err,'saveOriginalVideoUrl') })
@@ -1270,6 +1329,23 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     /**
+     * Where the route plays from (`availability`, `sourceLabel`, `unavailableReason`,
+     * `thumbnailLink`), computed by the page service for the whole list and kept as card state so
+     * that it rides along with every snapshot. A computer coming or going then reaches the route
+     * through its own observer, without the list being rendered again.
+     *
+     * Returns whether the value actually changed.
+     */
+    setAvailabilityProps(props?: Record<string, unknown>): boolean {
+        const key = props ? JSON.stringify(props) : undefined
+        if (this.availabilityKey === key)
+            return false
+        this.availabilityKey = key
+        this.availabilityProps = props
+        return true
+    }
+
+    /**
      * Pushes a fresh, complete set of display properties to whoever is holding this card's own
      * observer (the list item component) - the per-card channel a page service uses to reflect
      * a change without going through the page's own routes array: `RoutesTable` is memoized on
@@ -1340,7 +1416,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         
         this.restoreVideoUrl()
-        descr.tsImported = null
+        // a route that exists because of a computer keeps its place in the list
+        if (!descr.linkShared)
+            descr.tsImported = null
         this.route.details.video.file = undefined
         this.route.details.video.url = descr.videoUrl
 
@@ -1438,6 +1516,22 @@ export class RouteCard extends BaseCard implements Card<Route> {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    /** true if a connected paired computer is known to have the video (cached state only, never a request) */
+    protected hasLinkSource(descr: RouteInfo): boolean {
+        try {
+            return this.getVideoResolver().hasLinkSource(descr)
+        }
+        catch(err:any) {
+            this.logError(err,'hasLinkSource')
+            return false
+        }
+    }
+
+    @Injectable
+    protected getVideoResolver() {
+        return useRouteVideoResolver()
     }
 
     @Injectable

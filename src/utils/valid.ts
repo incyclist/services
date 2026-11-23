@@ -12,3 +12,10 @@ export function valid(v) {
     return true;
 }
 
+
+/**
+ * Returns true only for a number greater than zero; `undefined`, `null` and `NaN` are not positive.
+ *
+ * @param v - the value to check
+ */
+export const isPositive = (v: unknown): boolean => typeof v === 'number' && v > 0

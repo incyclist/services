@@ -22,6 +22,12 @@ import { PreviewStore, usePreviewStore } from "../previews";
 import { RouteVideoAvailabilityService, useRouteVideoAvailability } from "../video-availability/service";
 import { RouteVideoPageActions, useRouteVideoPageActions } from "../video-availability/pageActions";
 import { RouteVideoState, VideoDownloadRow, VideoKeepChoice } from "../video-availability/types";
+import { useLocalLinkClient } from "../../link/client/service";
+import { useRouteSharingClient } from "../sharing/client/service";
+import { useRouteVideoResolver } from "../sharing/client/resolver";
+import type { LinkSnapshot, RouteAvailability } from "../sharing/client/types";
+import type { ThumbnailLinkSource } from "../thumbnails/types";
+import { scrubTokens } from '../../utils/scrub'
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -59,6 +65,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected routeVideoUpdateHandler   = this.onRouteVideoUpdate.bind(this)
     protected downloadRowsUpdateHandler = this.emitDownloadUpdate.bind(this)
     protected accessChangedHandler      = this.updatePageDisplay.bind(this)
+    protected linkStateHandler          = this.onLinkStateChanged.bind(this)
+
+    // availability props per route, so that an unchanged route keeps its identity between renders
+    protected availabilityCache: Map<string, {source:RouteItemProps, key:string, decorated:RouteItemProps}> = new Map()
 
     constructor()  {
         super('RoutesPage')
@@ -73,6 +83,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             EventLogger.setGlobalConfig('page','Routes')
 
             super.openPage()
+            this.retryLinks()
 
             try {
                 const service = useRouteList()
@@ -380,7 +391,8 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         try {
             const service = this.getRouteList()
             const card = service.getCard(id)
-            if (card) {
+            // a route that exists only because a computer shares it offers no delete (without a local copy)
+            if (card?.canDelete()) {
                 card.delete()
             }
         }
@@ -389,14 +401,68 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         }
     }
 
+    /**
+     * Removes the copy of a route's video on this device and nothing else: the route stays in the
+     * list, demoted from `local` to `fromLink`, `remote` or `unavailable`. Distinct from
+     * {@link onDelete}, which removes the route itself. Nothing is told to any computer.
+     *
+     * @param routeKey the route's id (a route-server id or the `routeHash` of a local route)
+     * @returns false if the route has no copy on this device
+     */
+    async deleteLocalCopy(routeKey: string): Promise<boolean> {
+        try {
+            const card = this.getRouteList().getCard(routeKey)
+            if (!card?.hasLocalCopy()) {
+                return false
+            }
+            await card.deleteDownload()
+            this.updatePageDisplay()
+            return true
+        }
+        catch(err:any) {
+            this.logError(err,'deleteLocalCopy')
+            return false
+        }
+    }
+
     start() {
+        try {
+            const selected = this.getRouteList().getSelected()
+            if (selected?.description?.linkShared && !selected.details) {
+                this.startWhenDetailsLoaded(selected)
+                return
+            }
+            this.startRide()
+        }
+        catch(err:any) {
+            this.logError(err,'start')
+        }
+    }
+
+    /** The details of a route from a computer are loaded before the ride starts; the video is resolved afterwards. */
+    protected startWhenDetailsLoaded(route:Route) {
+        this.getSharingClient().loadDescriptor(route,'ride')
+            .then( loaded=>{
+                // without details (the computer did not hand them out) the ride does not start
+                if (loaded?.details)
+                    this.startRide()
+                else
+                    this.updatePageDisplay()
+            })
+            .catch( err=>{
+                this.logError(err,'start')
+                this.updatePageDisplay()
+            })
+    }
+
+    protected startRide() {
         try {
             const service = this.getRouteList()
             const pairing = this.getDevicePairing()
             
             const setttings:any = service.getStartSettings()??{} as any
             const {id,title,videoUrl} = setttings
-            this.logEvent( {message:'Attempting to start a ride',id,title,videoUrl,readyToStart:pairing.isReadyToStart(), } )
+            this.logEvent( {message:'Attempting to start a ride',id,title,videoUrl:scrubTokens(videoUrl),readyToStart:pairing.isReadyToStart(), } )
             
             service.close()       
             const next =  pairing.isReadyToStart() ? '/rideDeviceOK'  : '/pairingStart' 
@@ -419,7 +485,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
      */
     getRouteDetailsProps(routeId: string): RouteDetailsProps {
         try {
-            return { routeId, attachedWorkout: this.getAttachedWorkoutProps(), video: this.getVideoDetailsProps(routeId) }
+            return { routeId, attachedWorkout: this.getAttachedWorkoutProps(), video: this.getVideoDetailsProps(routeId), ...this.getAvailabilityProps(routeId) }
         }
         catch (err) {
             this.logError(err, 'getRouteDetailsProps')
@@ -643,13 +709,129 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getPageObserver()?.emit('page-update')
     }
 
+    /**
+     * `availability`, `sourceLabel` and `unavailableReason` of one route for Route Details; absent
+     * when route sharing is not available and the route does not depend on it.
+     */
+    protected getAvailabilityProps(routeId:string):Partial<RouteAvailability> & {thumbnailLink?:ThumbnailLinkSource} {
+        try {
+            const card = this.getRouteList().getCard(routeId)
+            const descr = card?.getData()?.description
+            if (!card || (!descr?.linkShared && !this.getVideoResolver().isAvailable()))
+                return {}
+            const availability = card.getAvailability()
+            return { ...this.toAvailabilityProps(availability), ...this.getThumbnailLinkProps(routeId, descr?.linkShared, availability.linkId) }
+        }
+        catch(err:any) {
+            this.logError(err,'getAvailabilityProps')
+            return {}
+        }
+    }
+
+    /**
+     * The list with `availability`, `sourceLabel` and `unavailableReason` on every route (on
+     * `linkShared` routes only, while route sharing is not available). All from cached state; the
+     * state of the computers is read once for the whole list.
+     */
     protected getRoutesDisplayProps():Array<RouteItemProps> {
         const {routes=[]} = this.serviceState??{}
 
         // videoPill lives on the card itself (RouteCard.setVideoPill/getDisplayProperties,
         // architecture.md §3.7.1) - routeProps already carries it, absent whenever there is
         // nothing to show, which is always the case without the fileAccess binding.
-        return routes
+        try {
+            return this.addAvailability(routes)
+        }
+        catch(err:any) {
+            this.logError(err,'getRoutesDisplayProps')
+            return routes
+        }
+    }
+
+    protected getThumbnailLinkProps(routeId:string, linkShared:boolean|undefined, linkId?:string):{thumbnailLink?:ThumbnailLinkSource} {
+        if (!linkShared)
+            return {}
+        const thumbnailLink = this.getVideoResolver().getThumbnailLink?.(routeId, linkId)
+        return thumbnailLink ? {thumbnailLink} : {}
+    }
+
+    protected toAvailabilityProps(a:RouteAvailability):Pick<RouteAvailability,'availability'|'sourceLabel'|'unavailableReason'> {
+        const props:Pick<RouteAvailability,'availability'|'sourceLabel'|'unavailableReason'> = {availability:a.availability}
+        if (a.sourceLabel!==undefined)
+            props.sourceLabel = a.sourceLabel
+        if (a.unavailableReason!==undefined)
+            props.unavailableReason = a.unavailableReason
+        return props
+    }
+
+    protected addAvailability(routes:Array<RouteItemProps>):Array<RouteItemProps> {
+        const resolver = this.getVideoResolver()
+        const all = resolver.isAvailable()
+        if (!all && !routes.some(r=>r.linkShared)) {
+            this.availabilityCache.clear()
+            return routes
+        }
+
+        const links:LinkSnapshot = resolver.getLinkSnapshot()
+        const previous = this.availabilityCache
+        this.availabilityCache = new Map()
+        return routes.map( route => {
+            if (!all && !route.linkShared)
+                return route
+            const props = this.getRouteAvailabilityProps(route, resolver, links)
+            const key = `${props.availability}|${props.sourceLabel??''}|${props.unavailableReason??''}|${props.thumbnailLink?.linkId??''}|${props.thumbnailLink?.thumbHandle??''}`
+            const cached = previous.get(route.id)
+            const decorated = cached?.source===route && cached.key===key ? cached.decorated : {...route,...props}
+            this.availabilityCache.set(route.id,{source:route,key,decorated})
+
+            // keep the card in step (silently), so that its own snapshot never contradicts the list
+            this.getCardOf(route.id)?.setAvailabilityProps?.(props)
+            return decorated
+        })
+    }
+
+    protected getRouteAvailabilityProps(route:RouteItemProps, resolver:ReturnType<typeof useRouteVideoResolver>, links:LinkSnapshot) {
+        const availability = resolver.getRouteAvailability(route,{hasDetails:route.loaded, links})
+        return {...this.toAvailabilityProps(availability), ...this.getThumbnailLinkProps(route.id, route.linkShared, availability.linkId)}
+    }
+
+    protected getCardOf(routeId:string) {
+        try {
+            return this.getRouteList()?.getCard(routeId)
+        }
+        catch {
+            return undefined
+        }
+    }
+
+    /**
+     * A computer came or went, or a catalog was synced: tell the cards of the routes whose
+     * availability changed through their own observers. The list is not rendered again and the
+     * routes that did not change get no update.
+     */
+    protected refreshLinkAvailability():void {
+        const {routes=[]} = this.serviceState??{}
+        const resolver = this.getVideoResolver()
+        const all = resolver.isAvailable()
+        if (!all && !routes.some(r=>r.linkShared))
+            return
+
+        const links:LinkSnapshot = resolver.getLinkSnapshot()
+        for (const route of routes) {
+            try {
+                if (!all && !route.linkShared)
+                    continue
+                const card = this.getCardOf(route.id)
+                // the markers of the description may have changed since the route was put in the page state
+                const current = card?.getRouteDescription?.()
+                const props = this.getRouteAvailabilityProps(current ? {...route, ...current, linkSources: current.linkSources} as RouteItemProps : route, resolver, links)
+                if (card?.setAvailabilityProps?.(props))
+                    card.emitUpdate()
+            }
+            catch (err:any) {
+                this.logError(err,'refreshLinkAvailability')
+            }
+        }
     }
 
     protected getSearchFilters():SearchFilter {
@@ -664,6 +846,12 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getVideoAvailability().on('route-video-update', this.routeVideoUpdateHandler)
         this.getVideoAvailability().on('download-rows-update', this.downloadRowsUpdateHandler)
         this.getFolderAccess().on('access-changed', this.accessChangedHandler)
+
+        // availability follows the cached state of the computers: a session opened or closed, a catalog synced
+        this.getLocalLinkClient().on('session-changed', this.linkStateHandler)
+        this.getLocalLinkClient().on('state-changed', this.linkStateHandler)
+        this.getSharingClient().on('synced', this.linkStateHandler)
+        this.getSharingClient().on('link-sources-changed', this.linkStateHandler)
 
         const {observer} = this.serviceState??{}
         if (!observer)
@@ -686,6 +874,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getVideoAvailability().off('route-video-update', this.routeVideoUpdateHandler)
         this.getVideoAvailability().off('download-rows-update', this.downloadRowsUpdateHandler)
         this.getFolderAccess().off('access-changed', this.accessChangedHandler)
+        this.getLocalLinkClient().off('session-changed', this.linkStateHandler)
+        this.getLocalLinkClient().off('state-changed', this.linkStateHandler)
+        this.getSharingClient().off('synced', this.linkStateHandler)
+        this.getSharingClient().off('link-sources-changed', this.linkStateHandler)
 
         if (!observer)
             return
@@ -895,8 +1087,51 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.updatePageDisplay()
     }
 
-    protected onStateUpdate() {
+    /**
+     * The route list changed ('updated'/'loaded'): the page renders from `serviceState`, so the
+     * new routes must be taken over from the event payload, or searched again with the current
+     * filters if the payload is not a search state. The observer the page subscribed to stays.
+     */
+    protected onStateUpdate(state?: unknown) {
+        try {
+            this.refreshServiceState(state)
+        }
+        catch (err: any) {
+            this.logError(err, 'onStateUpdate')
+        }
         this.updatePageDisplay()
+    }
+
+    /** a link event: the page and an open details dialog show where the route is available from */
+    protected onLinkStateChanged() {
+        try {
+            this.refreshLinkAvailability()
+            if (this.detailRouteId)
+                this.emitRouteDetailsUpdate(this.detailRouteId)
+        }
+        catch (err: any) {
+            this.logError(err, 'onLinkStateChanged')
+        }
+    }
+
+    protected refreshServiceState(state?: unknown) {
+        const current = this.serviceState
+        if (!current)
+            return
+        const payload = state as Partial<SearchState> | undefined
+        const next = Array.isArray(payload?.routes) ? payload as SearchState : this.getRouteList().searchRepo(current.filters)
+        if (!Array.isArray(next?.routes))
+            return
+        this.serviceState = { ...next, filters: current.filters ?? next.filters, observer: current.observer ?? next.observer }
+    }
+
+    protected retryLinks() {
+        try {
+            this.getLocalLinkClient().retryNow()
+        }
+        catch (err: any) {
+            this.logError(err, 'retryLinks')
+        }
     }
 
     protected onDialogClosed() {
@@ -1009,6 +1244,21 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     @Injectable
     protected getVideoPageActions(): RouteVideoPageActions {
         return useRouteVideoPageActions()
+    }
+
+    @Injectable
+    protected getLocalLinkClient() {
+        return useLocalLinkClient()
+    }
+
+    @Injectable
+    protected getSharingClient() {
+        return useRouteSharingClient()
+    }
+
+    @Injectable
+    protected getVideoResolver() {
+        return useRouteVideoResolver()
     }
 
 }

@@ -740,3 +740,65 @@ describe('RoutesDbLoader',()=>{
 
 })
 
+describe('RoutesDbLoader.saveDescriptions', () => {
+    let db: any
+
+    beforeEach(() => {
+        db = new RoutesDbLoader()
+        db.routeDescriptions = [
+            { id: 'a', title: 'A', hasVideo: true, requiresDownload: true },
+            { id: 'b', title: 'B', hasVideo: true },
+        ]
+        db.routeHashes = {}
+        db.write = jest.fn()
+        db.writeDetails = jest.fn().mockResolvedValue(undefined)
+        db.loadDetailRecord = jest.fn()
+    })
+
+    afterEach(() => {
+        db.reset?.()
+    })
+
+    test('persists the description of the given routes with one write, never their details', () => {
+        const a = new Route({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true, linkSources: ['L1'], points: [{ routeDistance: 0 }] } as any)
+        const unknown = new Route({ id: 'zz', title: 'not persisted yet' })
+
+        const updated = db.saveDescriptions([a, unknown])
+
+        expect(updated).toBe(1)
+        expect(db.routeDescriptions[0]).toEqual({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true, linkSources: ['L1'] })
+        expect(db.routeDescriptions[1]).toEqual({ id: 'b', title: 'B', hasVideo: true })
+        expect(db.routeDescriptions).toHaveLength(2)
+        expect(db.write).toHaveBeenCalledTimes(1)
+        expect(db.writeDetails).not.toHaveBeenCalled()
+        expect(db.loadDetailRecord).not.toHaveBeenCalled()
+    })
+
+    test('only linkSources is patched into the stored entry: other in-memory changes are not persisted by it, and a pending save() still writes the details', async () => {
+        db.routeHashes.a = JSON.stringify(db.routeDescriptions[0])
+        const a = new Route({ id: 'a', title: 'A changed in memory', hasVideo: true, requiresDownload: true, linkSources: ['L1'] } as any)
+
+        db.saveDescriptions([a])
+
+        expect(db.routeDescriptions[0]).toEqual({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true, linkSources: ['L1'] })
+        expect(db.routeHashes.a).toBe(JSON.stringify(db.routeDescriptions[0]))
+        expect(a.description.title).toBe('A changed in memory')
+
+        await db.save(a)
+
+        expect(db.routeDescriptions[0].title).toBe('A changed in memory')
+        expect(db.writeDetails).toHaveBeenCalledTimes(1)
+    })
+
+    test('an empty marker removes linkSources from the stored entry', () => {
+        db.routeDescriptions[0].linkSources = ['L1']
+        db.saveDescriptions([new Route({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true } as any)])
+        expect(db.routeDescriptions[0]).toEqual({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true })
+    })
+
+    test('writes nothing if no route is persisted, and never throws', () => {
+        expect(db.saveDescriptions([new Route({ id: 'zz', title: 'x' })])).toBe(0)
+        expect(db.write).not.toHaveBeenCalled()
+        expect(db.saveDescriptions(undefined)).toBe(0)
+    })
+})

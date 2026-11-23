@@ -20,6 +20,7 @@ import { Inject } from "../../base/decorators";
 import { usePreviewStore } from "../previews/store";
 import { useRouteLibraryScanner } from "../library/service";
 import { RouteListObserver } from "./RouteListObserver";
+import { RoutesPageService } from "../page/service";
 
 import type { ParseResult } from "../types";
 import { RouteServerValidationError } from "../servers/errors";
@@ -1478,6 +1479,17 @@ describe('RouteListService',()=>{
                 expect(result).toBe('screenshot')
                 expect(d.previewUrl).toBe('screenshot')
             })
+
+            test('a route without a video is not looked up next to a video and takes no screenshot', async () => {
+                const d = descr({ videoUrl:undefined })
+                const check = jest.spyOn(service as any, 'checkExistingPreviewFiles')
+
+                const result = await (service as any).doCreatePreview(d)
+
+                expect(result).toBeUndefined()
+                expect(check).not.toHaveBeenCalled()
+                expect(getBindings().video.screenshot).not.toHaveBeenCalled()
+            })
         })
 
         describe('with the preview store', () => {
@@ -1851,8 +1863,20 @@ describe('RouteListService',()=>{
             service.requestRouteDetails('r1', onResult)
             await settle()
 
-            expect(spy).toHaveBeenCalledWith('r1')
+            // a row asking on its own is a list fetch: it must not repeat a descriptor load that just failed
+            expect(spy).toHaveBeenCalledWith('r1', false, 'list')
             expect(onResult).toHaveBeenCalledWith(details)
+        })
+
+        test('a shared route without details and without country does not load its descriptor to verify the country',()=>{
+            const loadDescriptor = jest.fn()
+            service.inject('RouteSharingClient', { loadDescriptor })
+            const route = { details: undefined, description: { linkShared: true }, updateCountryFromPoints: jest.fn() }
+
+            ;(service as any).verifyRouteCountry(route)
+
+            expect(loadDescriptor).not.toHaveBeenCalled()
+            expect(route.updateCountryFromPoints).not.toHaveBeenCalled()
         })
 
         test('two requests for the same route make one getRouteDetails() call',async ()=>{
@@ -1900,6 +1924,225 @@ describe('RouteListService',()=>{
             ;['a','b','c','d','e','f'].forEach( id => service.getRouteDetails(id))
 
             expect(spy).toHaveBeenCalledTimes(6)
+        })
+    })
+
+
+    describe('linkShared routes',()=>{
+        let service:MockeableService
+        const sharing = { loadDescriptor: jest.fn() }
+        const shared = () => new Route({ id:'sh1', routeHash:'sh1', title:'Shared', isLocal:true, hasVideo:true, linkShared:true, distance:1000 })
+
+        beforeEach(()=>{
+            new RouteListService().reset()
+            service = prepareMock(null,{mockLoad:true})
+            Inject('RouteSharingClient', sharing)
+            ;(service as any).db.getDetails = jest.fn().mockResolvedValue(undefined)
+            ;(service as any).db.save = jest.fn().mockResolvedValue(undefined)
+            ;(service as any).db.delete = jest.fn().mockResolvedValue(undefined)
+            ;(service as any).api = { loadDetails: jest.fn() }
+        })
+        afterEach(()=>{
+            Inject('RouteSharingClient', null)
+            ;(service as any).reset()
+            ;(new RoutesDbLoader() as any).reset()
+            jest.clearAllMocks()
+        })
+
+        test('details are requested from the computer, never from an API',async ()=>{
+            service.addRoute(shared())
+            sharing.loadDescriptor.mockImplementation(async (route:Route) => { route.details = { id:'sh1', title:'Shared', points:[] } as RouteApiDetail; return route })
+
+            await service.getRouteDetails('sh1')
+
+            expect(sharing.loadDescriptor).toHaveBeenCalledWith(expect.objectContaining({description:expect.objectContaining({id:'sh1'})}),'details')
+            expect((service as any).api.loadDetails).not.toHaveBeenCalled()
+        })
+
+        test('a computer that can not be reached leaves the details absent without an error',async ()=>{
+            service.addRoute(shared())
+            sharing.loadDescriptor.mockRejectedValue(new Error('unreachable'))
+
+            const res = await service.getRouteDetails('sh1')
+
+            expect(res).toMatchObject({ totalDistance: expect.anything() })
+            expect(service.getRoute('sh1')?.details).toBeUndefined()
+            expect((service as any).api.loadDetails).not.toHaveBeenCalled()
+        })
+
+        test('persisted details are used without asking the computer',async ()=>{
+            service.addRoute(shared())
+            ;(service as any).db.getDetails = jest.fn().mockResolvedValue({ id:'sh1', title:'Shared', points:[], video:{} })
+            await service.getRouteDetails('sh1')
+            expect(sharing.loadDescriptor).not.toHaveBeenCalled()
+        })
+
+        test('addRoutes adds several routes with one update event and refreshes known ones in place',()=>{
+            service.addRoute(shared())
+            const emit = jest.spyOn(service,'emitLists')
+            const updated = new Route({ ...shared().description, title:'Renamed' })
+            const other = new Route({ id:'sh2', title:'Other', isLocal:true, hasVideo:true, linkShared:true })
+
+            service.addRoutes([updated, other])
+
+            expect(emit).toHaveBeenCalledTimes(1)
+            expect(service.getRoute('sh1')?.description.title).toBe('Renamed')
+            expect(service.getRoute('sh2')).toBeDefined()
+        })
+
+        describe('a shared route never replaces a local route',()=>{
+            const local = (extra:Record<string,unknown>={}) => new Route({ id:'sh1', routeHash:'sh1', title:'Mine', isLocal:true, hasVideo:true, videoUrl:'file:///mine.mp4', distance:5, ...extra } as any)
+
+            test('visible local route with the same id is left untouched',()=>{
+                service.addRoute(local())
+                service.addRoutes([shared()],'system')
+
+                const route = service.getRoute('sh1')!
+                expect(route.description.linkShared).toBeUndefined()
+                expect(route.description.title).toBe('Mine')
+                expect(route.description.videoUrl).toBe('file:///mine.mp4')
+                expect((service as any).routes.filter( (r:Route)=>r.description.id==='sh1')).toHaveLength(1)
+            })
+
+            test('tombstoned local route with the same id is left untouched and not duplicated',()=>{
+                service.addRoute(local({isDeleted:true}))
+                service.addRoutes([shared()],'system')
+
+                const all = (service as any).routes.filter( (r:Route)=>r.description.id==='sh1')
+                expect(all).toHaveLength(1)
+                expect(all[0].description.linkShared).toBeUndefined()
+                expect(all[0].description.isDeleted).toBe(true)
+            })
+
+            test('removeSharedRoute refuses a route that is not a shared placeholder',async ()=>{
+                service.addRoute(local())
+                const res = await service.removeSharedRoute(shared())
+
+                expect(res).toBe(false)
+                expect((service as any).db.delete).not.toHaveBeenCalled()
+                expect(service.getRoute('sh1')).toBeDefined()
+            })
+
+            test('a local route that arrives after the placeholder replaces it completely',()=>{
+                const placeholder = shared()
+                placeholder.details = { id:'sh1', title:'Shared', points:[], video:{url:'http://desktop/v/x'} } as any
+                service.addRoute(placeholder)
+
+                service.addRoute(local(),'system')
+
+                const route = service.getRoute('sh1')!
+                expect(route.description.linkShared).toBeUndefined()
+                expect(route.description.title).toBe('Mine')
+                expect(route.details).toBeUndefined()
+                expect((service as any).routes.filter( (r:Route)=>r.description.id==='sh1')).toHaveLength(1)
+            })
+        })
+
+        test('a route added through addRoutes shows up on an open Routes page without reopening it',()=>{
+            const page = new RoutesPageService()
+            Inject('RouteList', service)
+            Inject('VideoResolver', { isAvailable: jest.fn().mockReturnValue(true), getLinkSnapshot: jest.fn().mockReturnValue(new Map()), getRouteAvailability: jest.fn().mockReturnValue({ canStart:true, availability:'local' }), getThumbnailLink: jest.fn() })
+            Inject('UserSettings', { getValue: jest.fn((_k:string, d:unknown) => d), get: jest.fn((_k:string, d:unknown) => d) })
+            Inject('VideoAvailability', { on: jest.fn(), off: jest.fn() })
+            Inject('FolderAccess', { on: jest.fn(), off: jest.fn() })
+            Inject('LocalLinkClient', { on: jest.fn(), off: jest.fn() })
+            Inject('SharingClient', { on: jest.fn(), off: jest.fn() })
+            Inject('RouteDownload', { on: jest.fn(), off: jest.fn(), getActiveDownloads: jest.fn().mockReturnValue([]) })
+            try {
+                const p = page as any
+                p.subscribeAllActiveDownloads = jest.fn()
+                jest.spyOn(service,'isStillLoading').mockReturnValue(false)
+                p.serviceState = service.search()
+                p.startEventListener()
+                const before = page.getPageDisplayProps().routes.map( r=>r.id )
+                expect(before).not.toContain('sh1')
+
+                service.addRoutes([shared()], 'system')
+
+                expect(page.getPageDisplayProps().routes.map( r=>r.id )).toContain('sh1')
+                p.stopEventListener()
+            }
+            finally {
+                page.reset()
+                for (const key of ['RouteList','VideoResolver','UserSettings','VideoAvailability','FolderAccess','LocalLinkClient','SharingClient','RouteDownload'])
+                    Inject(key, null)
+            }
+        })
+
+        test('addRoutes without a new route sends no update event',()=>{
+            service.addRoute(shared())
+            const emit = jest.spyOn(service,'emitLists')
+            service.addRoutes([new Route({ ...shared().description, title:'Renamed' })])
+            expect(emit).not.toHaveBeenCalled()
+        })
+
+        test('saveRoute persists through the db',async ()=>{
+            const route = shared()
+            await service.saveRoute(route, true)
+            expect((service as any).db.save).toHaveBeenCalledWith(route, true)
+        })
+
+        test('addRoute and addRoutes tell the route sharing that routes were added',()=>{
+            const added = jest.fn()
+            service.on('routes-added',added)
+            service.addRoute(shared())
+            service.addRoutes([new Route({ ...shared().description, title:'Renamed' })])
+            expect(added).toHaveBeenCalledTimes(2)
+        })
+
+        describe('updateLinkSources',()=>{
+            const own = () => new Route({ id:'o1', routeHash:'h1', title:'Own', isLocal:false, hasVideo:true, requiresDownload:true, distance:5000, country:'DE' })
+
+            beforeEach(()=>{
+                ;(service as any).db.saveDescriptions = jest.fn()
+            })
+
+            test('changes only the marker, in memory and in one description write, without touching details',()=>{
+                const route = own()
+                const before = JSON.parse(JSON.stringify(route.description))
+                service.addRoute(route)
+
+                const changed = service.updateLinkSources([{ id:'o1', linkSources:['A','B'] }])
+
+                expect(changed).toBe(1)
+                expect(service.getRoute('o1')?.description).toEqual({ ...before, linkSources:['A','B'] })
+                expect((service as any).db.saveDescriptions).toHaveBeenCalledTimes(1)
+                expect((service as any).db.saveDescriptions).toHaveBeenCalledWith([route])
+                expect((service as any).db.save).not.toHaveBeenCalled()
+                expect((service as any).db.getDetails).not.toHaveBeenCalled()
+                expect((service as any).api.loadDetails).not.toHaveBeenCalled()
+            })
+
+            test('a route whose marker did not change is not saved',()=>{
+                service.addRoute(new Route({ ...own().description, linkSources:['A'] }))
+                expect(service.updateLinkSources([{ id:'o1', linkSources:['A'] }])).toBe(0)
+                expect((service as any).db.saveDescriptions).not.toHaveBeenCalled()
+            })
+
+            test('an empty marker removes the field',()=>{
+                service.addRoute(new Route({ ...own().description, linkSources:['A'] }))
+                expect(service.updateLinkSources([{ id:'o1', linkSources:[] }])).toBe(1)
+                expect(service.getRoute('o1')?.description).not.toHaveProperty('linkSources')
+            })
+
+            test('an unknown route is ignored and a failure is not thrown',()=>{
+                expect(service.updateLinkSources([{ id:'nope', linkSources:['A'] }])).toBe(0)
+                service.addRoute(own())
+                ;(service as any).db.saveDescriptions = jest.fn(()=>{ throw new Error('boom') })
+                expect(service.updateLinkSources([{ id:'o1', linkSources:['A'] }])).toBe(0)
+            })
+        })
+
+        test('removeSharedRoute removes route, card and persisted record',async ()=>{
+            const route = shared()
+            service.addRoute(route)
+            expect(service.findCard('sh1')).toBeDefined()
+
+            await service.removeSharedRoute(route)
+
+            expect(service.getRoute('sh1')).toBeUndefined()
+            expect(service.findCard('sh1')?.card).toBeUndefined()
+            expect((service as any).db.delete).toHaveBeenCalled()
         })
     })
 

@@ -18,6 +18,9 @@ interface InterfaceInfoInternal extends InterfaceInfo {
     unavailable?: boolean
 }
 
+/** Owner of the pause the app itself requests when it goes to the background. */
+const DEFAULT_PAUSE_OWNER = 'app'
+
 interface OnDataHandlersMap   {[index: string]: (...args)=>void}
 
 /**
@@ -80,6 +83,7 @@ interface OnDataHandlersMap   {[index: string]: (...args)=>void}
 export class DeviceAccessService  extends IncyclistService{
     protected interfaces: InterfaceList = {}
     protected scanState: InternalScanState
+    protected pauseOwners = new Set<string>()
     protected defaultProps:InterfaceAccessProps
 
     constructor() {
@@ -438,22 +442,42 @@ export class DeviceAccessService  extends IncyclistService{
      *
      * Connected devices are unaffected and keep streaming, and an explicit scan still runs.
      * Interfaces that do not implement this are skipped.
+     *
+     * @param owner who asks for the pause. Background work resumes only after every owner that paused
+     * it has called [[resumeBackgroundActivity]], so a short exclusive use of the network discovery
+     * (e.g. the browse for a paired computer) cannot restart discovery while the app is paused.
      */
-    async pauseBackgroundActivity():Promise<void> {
-        const promises = Object.keys(this.interfaces).map( (name) =>
-            this.getInterface(name)?.pauseBackgroundActivity?.()
-        )
-        await Promise.allSettled(promises)
+    async pauseBackgroundActivity(owner:string=DEFAULT_PAUSE_OWNER):Promise<void> {
+        try {
+            this.pauseOwners.add(owner)
+            const promises = Object.keys(this.interfaces).map( (name) =>
+                this.getInterface(name)?.pauseBackgroundActivity?.()
+            )
+            await Promise.allSettled(promises)
+        }
+        catch(err:any) {
+            this.logError(err,'pauseBackgroundActivity')
+        }
     }
 
     /**
-     * Resumes the background work suspended by [[pauseBackgroundActivity]].
+     * Resumes the background work suspended by [[pauseBackgroundActivity]], unless another owner
+     * still holds it paused.
      */
-    async resumeBackgroundActivity():Promise<void> {
-        const promises = Object.keys(this.interfaces).map( (name) =>
-            this.getInterface(name)?.resumeBackgroundActivity?.()
-        )
-        await Promise.allSettled(promises)
+    async resumeBackgroundActivity(owner:string=DEFAULT_PAUSE_OWNER):Promise<void> {
+        try {
+            this.pauseOwners.delete(owner)
+            if (this.pauseOwners.size>0)
+                return
+
+            const promises = Object.keys(this.interfaces).map( (name) =>
+                this.getInterface(name)?.resumeBackgroundActivity?.()
+            )
+            await Promise.allSettled(promises)
+        }
+        catch(err:any) {
+            this.logError(err,'resumeBackgroundActivity')
+        }
     }
 
     async terminate(ifaceName?:string):Promise<void> { 

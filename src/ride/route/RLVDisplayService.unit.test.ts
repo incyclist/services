@@ -2154,4 +2154,107 @@ describe('RLVDisplayService video diagnostics', () => {
       expect((service as any).getSegmentProps(b)).toEqual({ routeId: 'b', index: 1, count: 2, hasNext: false })
     })
   })
+  describe('video from a paired computer', () => {
+    const remoteVideo = () => ({
+      isCurrent: true, isInitial: true, loaded: false,
+      route: { description: { id: 'r1', videoUrl: 'https://cdn/x.mp4', originalVideoUrl: 'https://cdn/x.mp4' } },
+    })
+    let resolver: any
+
+    beforeEach(() => {
+      resolver = {
+        isAvailable: jest.fn(() => true),
+        isEligible: jest.fn(() => true),
+        resolve: jest.fn(async () => ({ source: 'link', linkId: 'A', url: 'http://A:1/v/h?t=t' })),
+      }
+      Inject('VideoResolver', resolver)
+    })
+    afterEach(() => { Inject('VideoResolver', null) })
+
+    test('the ride copy of the route plays from the computer', async () => {
+      const video: any = remoteVideo()
+      await (service as any).applyLinkSource(video)
+      expect(video.route.description.videoUrl).toBe('http://A:1/v/h?t=t')
+      expect(video.linkId).toBe('A')
+    })
+
+    test('nothing is resolved without route sharing', () => {
+      resolver.isAvailable.mockReturnValue(false)
+      expect((service as any).canUseLinkSource(remoteVideo())).toBe(false)
+    })
+
+    test('a failed initial load falls through once to the next source', async () => {
+      const video: any = remoteVideo()
+      video.linkId = 'A'
+      resolver.resolve.mockResolvedValue({ source: 'remote', url: 'https://cdn/x.mp4' })
+      const report = jest.spyOn(service as any, 'reportVideoLoadError')
+
+      ;(service as any).onVideoLoadError({ code: 4, message: 'x' }, video)
+      await new Promise(r => setTimeout(r, 10))
+      expect(resolver.resolve).toHaveBeenCalledWith(expect.anything(), { skipLinks: ['A'] })
+      expect(video.route.description.videoUrl).toBe('https://cdn/x.mp4')
+      expect(video.linkId).toBeUndefined()
+      expect(report).not.toHaveBeenCalled()
+
+      ;(service as any).onVideoLoadError({ code: 4, message: 'x' }, video)
+      expect(report).toHaveBeenCalledTimes(1)
+    })
+
+    test('the error is reported if there is no next source', async () => {
+      const video: any = remoteVideo()
+      video.linkId = 'A'
+      resolver.resolve.mockResolvedValue({ source: 'unavailable' })
+      const report = jest.spyOn(service as any, 'reportVideoLoadError')
+      ;(service as any).onVideoLoadError({ code: 4, message: 'x' }, video)
+      await new Promise(r => setTimeout(r, 10))
+      expect(report).toHaveBeenCalledTimes(1)
+    })
+  })
+  describe('video source lost', () => {
+    let resolver: any
+    let svc: any
+    const streamed = (extra = {}) => ({ isCurrent: true, isInitial: true, loaded: true, linkId: 'A', route: { description: {} }, ...extra }) as any
+    const error = { code: 2, message: 'network' } as any
+
+    beforeEach(() => {
+      svc = service as any
+      jest.useFakeTimers()
+      resolver = { getLinkSnapshot: jest.fn(() => new Map([['A', { displayName: 'Den PC' }]])) }
+      Inject('VideoResolver', resolver)
+      svc.emit = jest.fn()
+    })
+    afterEach(() => { jest.useRealTimers(); Inject('VideoResolver', null) })
+
+    test('a playback error of a video streamed from a computer names the computer for a short while', () => {
+      const video = streamed()
+      svc.currentVideo = video
+      svc.onVideoPlaybackError(error, video)
+      expect(svc.sourceLost).toEqual({ computerName: 'Den PC' })
+      expect(svc.emit).toHaveBeenCalledWith('state-update')
+
+      jest.advanceTimersByTime(10000)
+      expect(svc.sourceLost).toBeUndefined()
+      expect(svc.emit).toHaveBeenCalledTimes(2)
+    })
+
+    test('a video that does not come from a computer, is not the current one or has not loaded is not reported', () => {
+      const current = streamed({ linkId: undefined })
+      svc.currentVideo = current
+      svc.onVideoPlaybackError(error, current)
+      svc.onVideoPlaybackError(error, streamed())
+      svc.currentVideo = streamed({ loaded: false })
+      svc.onVideoPlaybackError(error, svc.currentVideo)
+      expect(svc.sourceLost).toBeUndefined()
+    })
+
+    test('an unknown computer is not reported, a failing lookup does not throw', () => {
+      const video = streamed()
+      svc.currentVideo = video
+      resolver.getLinkSnapshot.mockReturnValue(new Map())
+      svc.onVideoPlaybackError(error, video)
+      expect(svc.sourceLost).toBeUndefined()
+      resolver.getLinkSnapshot.mockImplementation(() => { throw new Error('boom') })
+      expect(() => svc.onVideoPlaybackError(error, video)).not.toThrow()
+    })
+  })
 })

@@ -66,6 +66,44 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
     }
 
+    /**
+     * Persists the `linkSources` marker of the given routes into their stored description, and nothing else: the details
+     * of the routes are neither loaded nor written. Routes that are not in the repo yet are skipped
+     * (their description is written when they are saved). All changes lead to one write of the repo.
+     *
+     * @returns the number of descriptions that were updated
+     */
+    saveDescriptions(routes:Array<Route>):number {
+        let updated = 0
+        try {
+            const index = new Map((this.routeDescriptions??[]).map( (d,i)=>[d.id,i] as const))
+            for (const route of routes) {
+                const id = route?.description?.id
+                const idx = index.get(id) ?? -1
+                if (idx===-1)
+                    continue
+                // patch the stored entry only: other fields that changed in memory are persisted by their own
+                // save(), which must still see its change (the hash is the one of the patched stored entry)
+                const stored = this.routeDescriptions[idx]
+                const linkSources = route.description.linkSources
+                if (linkSources?.length>0)
+                    stored.linkSources = [...linkSources]
+                else
+                    delete stored.linkSources
+                this.routeHashes[id] = JSON.stringify(stored)
+                updated++
+            }
+            if (updated>0) {
+                this.isDirty = true
+                this.write()
+            }
+        }
+        catch(err:any) {
+            this.logger.logEvent({message:'error',fn:'saveDescriptions', error:err.message,stack:err.stack})
+        }
+        return updated
+    }
+
     async delete(route:Route):Promise<void> {
         const id = route.description.id
         const idx = this.routeDescriptions.findIndex( d=> d.id===id)
