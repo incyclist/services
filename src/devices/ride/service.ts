@@ -19,6 +19,7 @@ import { getPairingStartTimeout, DEVICE_RETRY_STOP_TIMEOUT_MS } from "./timeouts
 const NO_DATA_THRESHOLD = 10000
 const UNHEALTHY_THRESHOLD = 60000
 const RESTART_TIMEOUT = 45000
+const RESTART_RETRY_DELAY = 60000
 
 // The BLE peripheral scan is of no use while a ride is running: devices are connected already and a
 // reconnect re-uses their announcement. Probing/scanning only adds load and, on some stacks, can
@@ -1272,6 +1273,49 @@ export class DeviceRideService  extends IncyclistService{
         this.logEvent({message:'device health status changed', device:ai.adapter.getUniqueName(), udid:ai.udid, healthState:ai.dataStatus })
     }
 
+    // Restarts the adapter until it succeeds or a stop is requested (retry every minute). Written as recursion
+    // rather than a loop: the attempts must run strictly one after the other
+    private async restartUntilDone(unhealthy: AdapterRideInfo, isStopRequested: ()=>boolean): Promise<boolean> {
+        const success = await this.restartOnce(unhealthy)
+        if (success)
+            return true
+
+        await this.waitForRetry(RESTART_RETRY_DELAY, isStopRequested)
+        if (isStopRequested())
+            return false
+        return this.restartUntilDone(unhealthy, isStopRequested)
+    }
+
+    private async restartOnce(unhealthy: AdapterRideInfo): Promise<boolean> {
+        this.logEvent({ message: 'restart adapter', device: unhealthy.adapter.getUniqueName(), udid: unhealthy.udid });
+
+        let success = false
+        try {
+            success = await this.restartWithTimeout(unhealthy);
+            if (success) {
+                this.logEvent({message:'device healthy', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid })
+                unhealthy.tsLastData = Date.now()
+            }
+        }
+        catch (err) {
+            this.logEvent({ message: 'restart adapter failed', device: unhealthy.adapter.getUniqueName(), udid: unhealthy.udid, reason: err.message });
+        }
+
+        if (success) {
+            this.startHealthCheck(unhealthy)
+            unhealthy.isStarted = true;
+        }
+        return success
+    }
+
+    // waits in steps of one second, so that a stop request ends the wait promptly
+    private async waitForRetry(remainingMs: number, isStopRequested: ()=>boolean): Promise<void> {
+        if (remainingMs<=0 || isStopRequested())
+            return
+        await sleep(1000)
+        return this.waitForRetry(remainingMs-1000, isStopRequested)
+    }
+
     private async reconnectSingle(unhealthy: AdapterRideInfo) {
         unhealthy.isRestarting = true;
 
@@ -1284,35 +1328,7 @@ export class DeviceRideService  extends IncyclistService{
                 stopRequested= true;
         })
 
-        let success = false;
-        do {
-            this.logEvent({ message: 'restart adapter', device: unhealthy.adapter.getUniqueName(), udid: unhealthy.udid });
-            
-            try {
-                const started = await this.restartWithTimeout(unhealthy);
-                if (started) {
-                    this.logEvent({message:'device healthy', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid })                
-                    unhealthy.tsLastData = Date.now()
-                    success = true;
-                }
-            }
-            catch (err) {
-                this.logEvent({ message: 'restart adapter failed', device: unhealthy.adapter.getUniqueName(), udid: unhealthy.udid, reason: err.message });
-            }
-
-            if (success) {
-                this.startHealthCheck(unhealthy)
-                unhealthy.isStarted = true;
-            }
-
-            else {
-
-                // retry in a minute                
-                for (let i=0;i<60 && !stopRequested;i++)
-                    await sleep(1000)
-            }
-        }
-        while (!stopRequested && !success)
+        await this.restartUntilDone(unhealthy, ()=>stopRequested)
 
         unhealthy.isRestarting = false;
         this.emit('stop-adapter-confirmed', unhealthy.udid)
