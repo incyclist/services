@@ -1,3 +1,4 @@
+import { EventLogger } from 'gd-eventlog'
 import type { LinkServerMessage, PairedBody, PairFailedBody } from '../types'
 import { LinkClientConnection, LinkConnectionError } from './connection'
 import { PAIRING_IDLE_TIMEOUT_MS } from './consts'
@@ -58,6 +59,7 @@ export class LinkPairingFlow {
     protected conn?: LinkClientConnection
     protected requestId?: string
     protected idleTimer?: ReturnType<typeof setTimeout>
+    protected logger = new EventLogger('LinkPairingFlow')
 
     constructor(protected host: LinkPairingHost) {}
 
@@ -65,15 +67,20 @@ export class LinkPairingFlow {
         return this.state
     }
 
+    protected logError(err: Error, fn: string): void {
+        this.logger.logEvent({ message: 'Error', fn, error: err?.message, stack: err?.stack })
+    }
+
     /** Starts (or restarts) pairing with a computer. */
     async start(target: PairTarget): Promise<void> {
-        this.close()
-        this.target = target
-        this.set({ step: 'connecting', computerId: target.id, name: target.name })
-
-        const conn = this.host.createConnection()
-        this.conn = conn
+        let conn: LinkClientConnection | undefined
         try {
+            this.close()
+            this.target = target
+            this.set({ step: 'connecting', computerId: target.id, name: target.name })
+
+            conn = this.host.createConnection()
+            this.conn = conn
             await conn.connect(target.host, target.port)
             const { hello } = await conn.hello()
             if (this.conn !== conn)
@@ -83,51 +90,84 @@ export class LinkPairingFlow {
             conn.send('pair-request', { clientName: this.host.getClientName() })
             const first = await conn.receive()
             conn.listen()
-            conn.on('message', (msg: LinkServerMessage) => this.onMessage(conn, msg))
-            conn.on('close', () => this.onClose(conn))
+            const active = conn
+            conn.on('message', (msg: LinkServerMessage) => { this.onMessage(active, msg).catch(err => this.logError(err, 'onMessage')) })
+            conn.on('close', () => this.onClose(active))
             this.armIdleTimer(conn)
             await this.onMessage(conn, first)
         }
         catch (err) {
-            this.onError(conn, err)
+            this.onStartFailed(conn, err)
+        }
+    }
+
+    protected onStartFailed(conn: LinkClientConnection | undefined, err: unknown): void {
+        try {
+            if (conn)
+                this.onError(conn, err)
+            else
+                this.fail('unreachable')
+        }
+        catch (e) {
+            this.logError(e as Error, 'start')
         }
     }
 
     /** Submits the code the user read from the computer. Ignored unless a code is expected. */
     submit(pin: string): void {
-        const conn = this.conn
-        if (!conn || this.state.step !== 'code' || !this.requestId || !PIN_PATTERN.test(pin))
-            return
         try {
-            conn.send('pair-verify', { requestId: this.requestId, pin })
+            const conn = this.conn
+            if (!conn || this.state.step !== 'code' || !this.requestId || !PIN_PATTERN.test(pin))
+                return
+            try {
+                conn.send('pair-verify', { requestId: this.requestId, pin })
+            }
+            catch (err) {
+                this.onError(conn, err)
+            }
         }
         catch (err) {
-            this.onError(conn, err)
+            this.logError(err as Error, 'submit')
         }
     }
 
     /** A new request on the address of the last attempt. Ignored while a rate limit applies. */
     async retry(): Promise<void> {
-        const target = this.target
-        if (!target)
-            return
-        const state = this.state
-        if (state.step === 'failed' && state.retryAt !== undefined && this.host.now() < state.retryAt)
-            return
-        await this.start(target)
+        try {
+            const target = this.target
+            if (!target)
+                return
+            const state = this.state
+            if (state.step === 'failed' && state.retryAt !== undefined && this.host.now() < state.retryAt)
+                return
+            await this.start(target)
+        }
+        catch (err) {
+            this.logError(err as Error, 'retry')
+        }
     }
 
     /** The computer is already paired with this device: ends in `connected` without a pairing exchange. */
     markConnected(linkId: string, name: string, already: boolean): void {
-        this.close()
-        this.set({ step: 'connected', linkId, name, already })
+        try {
+            this.close()
+            this.set({ step: 'connected', linkId, name, already })
+        }
+        catch (err) {
+            this.logError(err as Error, 'markConnected')
+        }
     }
 
     /** Ends pairing without a result, or acknowledges the end of a finished one. */
     cancel(): void {
-        this.close()
-        this.target = undefined
-        this.set({ step: 'idle' })
+        try {
+            this.close()
+            this.target = undefined
+            this.set({ step: 'idle' })
+        }
+        catch (err) {
+            this.logError(err as Error, 'cancel')
+        }
     }
 
     protected close(): void {
@@ -147,8 +187,13 @@ export class LinkPairingFlow {
     protected armIdleTimer(conn: LinkClientConnection): void {
         clearTimeout(this.idleTimer)
         this.idleTimer = setTimeout(() => {
-            if (this.conn === conn)
-                this.fail('connection-lost')
+            try {
+                if (this.conn === conn)
+                    this.fail('connection-lost')
+            }
+            catch (err) {
+                this.logError(err as Error, 'idleTimer')
+            }
         }, PAIRING_IDLE_TIMEOUT_MS)
     }
 
@@ -181,8 +226,13 @@ export class LinkPairingFlow {
     }
 
     protected onClose(conn: LinkClientConnection): void {
-        if (this.conn === conn)
-            this.fail('connection-lost')
+        try {
+            if (this.conn === conn)
+                this.fail('connection-lost')
+        }
+        catch (err) {
+            this.logError(err as Error, 'onClose')
+        }
     }
 
     protected async onMessage(conn: LinkClientConnection, msg: LinkServerMessage): Promise<void> {
@@ -225,7 +275,14 @@ export class LinkPairingFlow {
         // the exchange is over: close the connection first, so that its close is not a failure
         if (this.conn === conn)
             this.close()
-        const failure = await this.host.onPaired(target, body)
+        let failure: LinkPairingFailure | undefined
+        try {
+            failure = await this.host.onPaired(target, body)
+        }
+        catch (err) {
+            this.logError(err as Error, 'onPaired')
+            failure = 'storage-unavailable'
+        }
         if (failure)
             return this.fail(failure)
         this.set({ step: 'connected', linkId: body.linkId, name: body.name || target.name })

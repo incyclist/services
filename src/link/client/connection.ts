@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { EventLogger } from 'gd-eventlog'
 import { createLinkAuthProbe, verifyLinkAuthResult } from '../auth'
 import { LinkClientChannel } from '../channel'
 import { LINK_FRAMING_VERSION, LINK_PROTOCOL_RANGE } from '../consts'
@@ -62,9 +63,14 @@ export class LinkClientConnection extends EventEmitter {
     protected pingTimer?: ReturnType<typeof setInterval>
     protected lastReceivedAt = Date.now()
     protected requests = new Map<string, OutstandingRequest>()
+    protected logger = new EventLogger('LinkClientConnection')
 
     constructor(protected socket: LinkSocket) {
         super()
+    }
+
+    protected logError(err: Error, fn: string): void {
+        this.logger.logEvent({ message: 'Error', fn, error: err?.message, stack: err?.stack })
     }
 
     /** true once the connection was closed or failed */
@@ -159,9 +165,14 @@ export class LinkClientConnection extends EventEmitter {
 
     /** From now on every received message is emitted as `message`; messages already queued are emitted first. */
     listen(): void {
-        this.listening = true
-        for (const msg of this.queue.splice(0))
-            this.emit('message', msg)
+        try {
+            this.listening = true
+            for (const msg of this.queue.splice(0))
+                this.emit('message', msg)
+        }
+        catch (err) {
+            this.logError(err as Error, 'listen')
+        }
     }
 
     /**
@@ -196,24 +207,36 @@ export class LinkClientConnection extends EventEmitter {
 
     /** Pings every 15 s; 45 s without any received frame closes the connection with `timeout`. */
     startKeepalive(): void {
-        this.stopKeepalive()
-        this.lastReceivedAt = Date.now()
-        this.pingTimer = setInterval(() => this.keepaliveTick(), PING_INTERVAL_MS)
+        try {
+            this.stopKeepalive()
+            this.lastReceivedAt = Date.now()
+            this.pingTimer = setInterval(() => this.keepaliveTick(), PING_INTERVAL_MS)
+        }
+        catch (err) {
+            this.logError(err as Error, 'startKeepalive')
+        }
     }
 
     /** Closes the connection. Idempotent. */
     close(): void {
-        this.end(undefined)
+        try {
+            this.end(undefined)
+        }
+        catch (err) {
+            this.logError(err as Error, 'close')
+        }
     }
 
     protected keepaliveTick(): void {
-        if (Date.now() - this.lastReceivedAt >= SILENCE_TIMEOUT_MS)
-            return this.end(new LinkConnectionError('timeout', 'keepalive'))
         try {
+            if (Date.now() - this.lastReceivedAt >= SILENCE_TIMEOUT_MS)
+                return this.end(new LinkConnectionError('timeout', 'keepalive'))
             this.send('ping', {})
         }
-        catch {
-            // the connection is already closed
+        catch (err) {
+            // a ping on a connection that is already closed is expected; anything else is logged
+            if (!(err instanceof LinkConnectionError))
+                this.logError(err as Error, 'keepaliveTick')
         }
     }
 
@@ -224,8 +247,17 @@ export class LinkClientConnection extends EventEmitter {
 
     protected attach(): void {
         this.socket.on('data', (chunk: Buffer) => this.onData(chunk))
-        this.socket.on('error', () => this.end(new LinkConnectionError(this.connected ? 'closed' : 'unreachable')))
-        this.socket.on('close', () => this.end(new LinkConnectionError('closed')))
+        this.socket.on('error', () => this.onSocketEnded(this.connected ? 'closed' : 'unreachable'))
+        this.socket.on('close', () => this.onSocketEnded('closed'))
+    }
+
+    protected onSocketEnded(code: LinkConnectionErrorCode): void {
+        try {
+            this.end(new LinkConnectionError(code))
+        }
+        catch (err) {
+            this.logError(err as Error, 'onSocketEnded')
+        }
     }
 
     protected write(data: Buffer): void {
@@ -233,13 +265,20 @@ export class LinkClientConnection extends EventEmitter {
     }
 
     protected onData(chunk: Buffer): void {
-        if (this.closed)
-            return
-        for (const event of this.reader.push(chunk)) {
-            if (event.type === 'error')
-                return this.end(new LinkConnectionError(event.code === 'bad-preamble' ? 'not-a-link' : 'protocol', event.code))
-            if (event.type === 'frame' && !this.onFrame(event.payload))
+        try {
+            if (this.closed)
                 return
+            for (const event of this.reader.push(chunk)) {
+                if (event.type === 'error')
+                    return this.end(new LinkConnectionError(event.code === 'bad-preamble' ? 'not-a-link' : 'protocol', event.code))
+                if (event.type === 'frame' && !this.onFrame(event.payload))
+                    return
+            }
+        }
+        catch (err) {
+            // an unexpected failure while handling received bytes: the stream can no longer be trusted
+            this.logError(err as Error, 'onData')
+            this.onSocketEnded('protocol')
         }
     }
 
@@ -258,19 +297,25 @@ export class LinkClientConnection extends EventEmitter {
     }
 
     protected dispatch(msg: LinkServerMessage): void {
-        if (this.resolveRequest(msg))
-            return
-        if (this.listening) {
-            if (msg.t !== 'pong')
-                this.emit('message', msg)
-            return
+        try {
+            if (this.resolveRequest(msg))
+                return
+            if (this.listening) {
+                if (msg.t !== 'pong')
+                    this.emit('message', msg)
+                return
+            }
+            const deliver = this.deliver
+            this.deliver = undefined
+            if (deliver)
+                deliver(msg)
+            else
+                this.queue.push(msg)
         }
-        const deliver = this.deliver
-        this.deliver = undefined
-        if (deliver)
-            deliver(msg)
-        else
-            this.queue.push(msg)
+        catch (err) {
+            // a listener failed: that must not end the connection or stop the following frames
+            this.logError(err as Error, 'dispatch')
+        }
     }
 
     /** @returns true if the message is the reply of an outstanding request */
@@ -323,6 +368,11 @@ export class LinkClientConnection extends EventEmitter {
         catch {
             // already gone
         }
-        this.emit('close', failure)
+        try {
+            this.emit('close', failure)
+        }
+        catch (err) {
+            this.logError(err as Error, 'end')
+        }
     }
 }

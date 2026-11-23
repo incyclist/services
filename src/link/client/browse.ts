@@ -1,3 +1,4 @@
+import { EventLogger } from 'gd-eventlog'
 import { LINK_MDNS_TYPE } from './consts'
 import type { LinkMdnsAnnouncement, LinkWifiBinding } from './types'
 
@@ -26,8 +27,13 @@ export const parseInstanceName = (name: string): { displayName: string, suffix?:
 export class LinkBrowse {
     protected cancelled = false
     protected finish?: () => void
+    protected logger = new EventLogger('LinkBrowse')
 
     constructor(protected wifi: LinkWifiBinding) {}
+
+    protected logError(err: Error, fn: string): void {
+        this.logger.logEvent({ message: 'Error', fn, error: err?.message, stack: err?.stack })
+    }
 
     /**
      * @param timeoutMs length of the browse
@@ -37,17 +43,22 @@ export class LinkBrowse {
     async run(timeoutMs: number, onFound?: (found: BrowseResult) => void): Promise<BrowseResult[]> {
         const found = new Map<string, BrowseResult>()
         const onup = (service: LinkMdnsAnnouncement) => {
-            if (this.cancelled || !service?.address || !service.port)
-                return
-            // some bindings deliver every announcement to every callback
-            if (service.type && service.type !== LINK_MDNS_TYPE)
-                return
-            const id = `${service.address}:${service.port}`
-            if (found.has(id))
-                return
-            const result = { name: service.name ?? '', host: service.address, port: service.port }
-            found.set(id, result)
-            onFound?.(result)
+            try {
+                if (this.cancelled || !service?.address || !service.port)
+                    return
+                // some bindings deliver every announcement to every callback
+                if (service.type && service.type !== LINK_MDNS_TYPE)
+                    return
+                const id = `${service.address}:${service.port}`
+                if (found.has(id))
+                    return
+                const result = { name: service.name ?? '', host: service.address, port: service.port }
+                found.set(id, result)
+                onFound?.(result)
+            }
+            catch (err) {
+                this.logError(err as Error, 'onup')
+            }
         }
 
         try {
@@ -68,8 +79,13 @@ export class LinkBrowse {
 
     /** Ends the browse early; `run()` resolves with what was found so far. */
     cancel(): void {
-        this.cancelled = true
-        this.finish?.()
+        try {
+            this.cancelled = true
+            this.finish?.()
+        }
+        catch (err) {
+            this.logError(err as Error, 'cancel')
+        }
     }
 
     protected release(): void {

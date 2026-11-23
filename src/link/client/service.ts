@@ -13,7 +13,7 @@ import { LinkBrowse, parseInstanceName } from './browse'
 import type { BrowseResult } from './browse'
 import { LinkClientConnection, LinkConnectionError } from './connection'
 import {
-    BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS,
+    BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS, RECOVERY_MAX_PER_SESSION,
 } from './consts'
 import { LinkMediaPath } from './media'
 import { LinkPairingFlow } from './pairing'
@@ -105,7 +105,7 @@ export class LocalLinkClientService extends IncyclistService {
             now: () => Date.now(),
             onChange: () => this.emitState(),
             onPaired: (target, body) => this.savePaired(target, body),
-            log: (message, data) => this.logEvent({ message: `local-link ${message}`, ...data }),
+            log: (message, data) => this.logPairing(message, data),
         })
     }
 
@@ -119,35 +119,58 @@ export class LocalLinkClientService extends IncyclistService {
         try {
             return this.getAppState().hasFeature('BRIDGE_MODE') === true && this.hasBindings() && this.meetsNativeRequirements()
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'isSupported')
             return false
         }
     }
 
     /** Loads the paired computers. No network access happens here. Safe to call repeatedly. */
     async init(): Promise<void> {
-        await this.ready()
-        this.emitState()
+        try {
+            await this.ready()
+            this.emitState()
+        }
+        catch (err) {
+            this.logError(err as Error, 'init')
+        }
     }
 
     /** Snapshot of everything the settings and pairing screens render. */
     getDisplayProps(): LocalLinkClientDisplayProps {
-        const available = this.isSupported()
-        return {
-            available,
-            links: available ? this.store.getAll().map(r => this.toLink(r)) : [],
-            checking: this.checkRun !== undefined,
-            searchBlocked: this.searchBlocked ? { ...this.searchBlocked } : undefined,
-            recovery: this.gate.info(Date.now()),
-            discovery: this.getDiscovery(),
-            pairing: this.pairingFlow.getState(),
+        try {
+            const available = this.isSupported()
+            return {
+                available,
+                links: available ? this.store.getAll().map(r => this.toLink(r)) : [],
+                checking: this.checkRun !== undefined,
+                searchBlocked: this.searchBlocked ? { ...this.searchBlocked } : undefined,
+                recovery: this.gate.info(Date.now()),
+                discovery: this.getDiscovery(),
+                pairing: this.pairingFlow.getState(),
+            }
+        }
+        catch (err) {
+            this.logError(err as Error, 'getDisplayProps')
+            // fallback: the feature renders as not available
+            return {
+                available: false, links: [], checking: false,
+                recovery: { autoBrowsesUsed: 0, autoBrowsesMax: RECOVERY_MAX_PER_SESSION },
+                discovery: { phase: 'idle' }, pairing: { step: 'idle' },
+            }
         }
     }
 
     /** The open session of a computer, if any. */
     getSession(linkId: string): LinkClientSession | undefined {
-        const session = this.sessions.get(linkId)
-        return session ? { ...session.info, capabilities: [...session.info.capabilities] } : undefined
+        try {
+            const session = this.sessions.get(linkId)
+            return session ? { ...session.info, capabilities: [...session.info.capabilities] } : undefined
+        }
+        catch (err) {
+            this.logError(err as Error, 'getSession')
+            return undefined
+        }
     }
 
     /**
@@ -155,19 +178,33 @@ export class LocalLinkClientService extends IncyclistService {
      * device pairing is running: the state is then `blocked`, never "none found". Resolves with
      * the final state when the search has ended.
      */
-    startSearch(): Promise<DiscoveryState> {
-        if (!this.isSupported()) {
-            this.searchPhase = { phase: 'blocked', reason: 'unsupported' }
-            this.emitState()
-            return Promise.resolve(this.getDiscovery())
+    async startSearch(): Promise<DiscoveryState> {
+        try {
+            if (!this.isSupported()) {
+                this.searchPhase = { phase: 'blocked', reason: 'unsupported' }
+                this.emitState()
+                return this.getDiscovery()
+            }
+            this.searching ??= this.doSearch().finally(() => { this.searching = undefined })
+            return await this.searching
         }
-        this.searching ??= this.doSearch().finally(() => { this.searching = undefined })
-        return this.searching
+        catch (err) {
+            this.logError(err as Error, 'startSearch')
+            // fallback: the search ended without a result
+            this.searchPhase = { phase: 'idle' }
+            this.emitState()
+            return { phase: 'idle' }
+        }
     }
 
     /** Ends a running search early; what was found stays listed. */
     cancelSearch(): void {
-        this.browse?.cancel()
+        try {
+            this.browse?.cancel()
+        }
+        catch (err) {
+            this.logError(err as Error, 'cancelSearch')
+        }
     }
 
     /**
@@ -175,31 +212,51 @@ export class LocalLinkClientService extends IncyclistService {
      * A computer that the search recognised as already paired ends in `connected` with `already`.
      */
     async selectComputer(computerId: string): Promise<void> {
-        const computer = this.discovered.get(computerId)
-        if (!computer)
-            return
-        await this.recognitions.get(computerId)
-        if (computer.linkId) {
-            this.pairingFlow.cancel()
-            this.setPairingConnected(computer.linkId)
-            return
+        try {
+            const computer = this.discovered.get(computerId)
+            if (!computer)
+                return
+            await this.recognitions.get(computerId)
+            if (computer.linkId) {
+                this.pairingFlow.cancel()
+                this.setPairingConnected(computer.linkId)
+                return
+            }
+            await this.pairingFlow.start(this.toTarget(computer))
         }
-        await this.pairingFlow.start(this.toTarget(computer))
+        catch (err) {
+            this.logError(err as Error, 'selectComputer')
+        }
     }
 
     /** Submits the 6-digit code shown on the computer. */
     submitCode(pin: string): void {
-        this.pairingFlow.submit(pin)
+        try {
+            this.pairingFlow.submit(pin)
+        }
+        catch (err) {
+            this.logError(err as Error, 'submitCode')
+        }
     }
 
     /** "Get a new code" / "Try again": a new pairing request on the same address, never a new search. */
     async retryPairing(): Promise<void> {
-        await this.pairingFlow.retry()
+        try {
+            await this.pairingFlow.retry()
+        }
+        catch (err) {
+            this.logError(err as Error, 'retryPairing')
+        }
     }
 
     /** Leaves the pairing steps (cancel, back, done). */
     cancelPairing(): void {
-        this.pairingFlow.cancel()
+        try {
+            this.pairingFlow.cancel()
+        }
+        catch (err) {
+            this.logError(err as Error, 'cancelPairing')
+        }
     }
 
     /**
@@ -209,44 +266,68 @@ export class LocalLinkClientService extends IncyclistService {
      * again") is not, but both need the app to be idle.
      */
     check(opts: { manual?: boolean } = {}): Promise<void> {
-        if (!this.isSupported())
+        try {
+            if (!this.isSupported())
+                return Promise.resolve()
+            // concurrent callers share one run; the run never rejects
+            this.checkRun ??= this.doCheck(opts?.manual === true)
+                .catch(err => this.logError(err as Error, 'check'))
+                .finally(() => {
+                    this.checkRun = undefined
+                    this.emitState()
+                })
+            return this.checkRun
+        }
+        catch (err) {
+            this.logError(err as Error, 'check')
             return Promise.resolve()
-        this.checkRun ??= this.doCheck(opts.manual === true).finally(() => {
-            this.checkRun = undefined
-            this.emitState()
-        })
-        return this.checkRun
+        }
     }
 
     /** Sets the name shown on this device; an empty name resets it to the computer's own name. */
     async rename(linkId: string, name: string): Promise<void> {
-        await this.ready()
-        if (await this.store.update(linkId, { localName: cleanLocalName(name) }))
-            this.emitState()
+        try {
+            await this.ready()
+            if (await this.store.update(linkId, { localName: cleanLocalName(name) }))
+                this.emitState()
+        }
+        catch (err) {
+            this.logError(err as Error, 'rename')
+        }
     }
 
     /** Records the catalog version a sync of this computer ended with, so that an unchanged version can skip the next sync. */
     async setCatalogVersion(linkId: string, catalogVersion: string): Promise<void> {
-        await this.ready()
-        if (await this.store.update(linkId, { catalogVersion }))
-            this.emitState()
+        try {
+            await this.ready()
+            if (await this.store.update(linkId, { catalogVersion }))
+                this.emitState()
+        }
+        catch (err) {
+            this.logError(err as Error, 'setCatalogVersion')
+        }
     }
 
     /** Forgets a computer: closes its session and deletes its record and secret. The computer is not told. */
     async forget(linkId: string): Promise<void> {
-        await this.ready()
-        this.cancelReconnect(linkId)
-        this.closeSession(linkId)
-        await this.media.release(linkId)
-        await this.store.remove(linkId)
-        this.mismatched.delete(linkId)
-        for (const computer of this.discovered.values()) {
-            if (computer.linkId === linkId)
-                delete computer.linkId
+        try {
+            await this.ready()
+            this.cancelReconnect(linkId)
+            this.closeSession(linkId)
+            await this.media.release(linkId)
+            await this.store.remove(linkId)
+            this.mismatched.delete(linkId)
+            for (const computer of this.discovered.values()) {
+                if (computer.linkId === linkId)
+                    delete computer.linkId
+            }
+            this.logEvent({ message: 'local-link computer forgotten' })
+            this.emitState()
+            this.emit('link-forgotten', linkId)
         }
-        this.logEvent({ message: 'local-link computer forgotten' })
-        this.emit('link-forgotten', linkId)
-        this.emitState()
+        catch (err) {
+            this.logError(err as Error, 'forget')
+        }
     }
 
     /**
@@ -254,13 +335,19 @@ export class LocalLinkClientService extends IncyclistService {
      * Never browses the network. `undefined` if the computer does not answer.
      */
     async ensureSession(linkId: string): Promise<LinkClientSession | undefined> {
-        await this.ready()
-        const link = this.store.get(linkId)
-        if (!link || !this.isSupported())
+        try {
+            await this.ready()
+            const link = this.store.get(linkId)
+            if (!link || !this.isSupported())
+                return undefined
+            if (!this.sessions.has(linkId))
+                await this.connectKnown(link)
+            return this.getSession(linkId)
+        }
+        catch (err) {
+            this.logError(err as Error, 'ensureSession')
             return undefined
-        if (!this.sessions.has(linkId))
-            await this.connectKnown(link)
-        return this.getSession(linkId)
+        }
     }
 
     /**
@@ -269,35 +356,48 @@ export class LocalLinkClientService extends IncyclistService {
      * available on this platform.
      */
     async getMedia(linkId: string): Promise<LinkMediaAccess | undefined> {
-        let session = this.getSession(linkId)
-        if (session && session.mediaTokenExpiresAt - Date.now() < MEDIA_TOKEN_MARGIN_MS) {
-            this.closeSession(linkId)
-            session = undefined
-        }
-        session ??= await this.ensureSession(linkId)
-        if (!session)
-            return undefined
+        try {
+            let session = this.getSession(linkId)
+            if (session && session.mediaTokenExpiresAt - Date.now() < MEDIA_TOKEN_MARGIN_MS) {
+                this.closeSession(linkId)
+                session = undefined
+            }
+            session ??= await this.ensureSession(linkId)
+            if (!session)
+                return undefined
 
-        const baseUrl = await this.media.getBaseUrl(linkId, session.host, session.mediaPort)
-        if (!baseUrl)
+            const baseUrl = await this.media.getBaseUrl(linkId, session.host, session.mediaPort)
+            if (!baseUrl)
+                return undefined
+            return { baseUrl, token: session.mediaToken, expiresAt: session.mediaTokenExpiresAt, catalogVersion: session.catalogVersion }
+        }
+        catch (err) {
+            this.logError(err as Error, 'getMedia')
             return undefined
-        return { baseUrl, token: session.mediaToken, expiresAt: session.mediaTokenExpiresAt, catalogVersion: session.catalogVersion }
+        }
     }
 
     /**
      * Sends a signed request on the open session of a computer and waits for its reply. Never
      * connects and never browses.
      *
-     * @returns the reply, or `undefined` if there is no open session
-     * @throws LinkConnectionError `timeout` if the computer did not answer in time, `closed` if the session ended
+     * @returns the reply, or `undefined` if there is no open session, the computer did not answer in
+     * time or the session ended
      */
     async request<K extends keyof LinkClientMessageBodies & string>(
         linkId: string, t: K, b: LinkClientMessageBodies[K], timeoutMs: number,
     ): Promise<Extract<LinkServerMessage, { t: K }> | undefined> {
-        const active = this.sessions.get(linkId)
-        if (!active)
+        try {
+            const active = this.sessions.get(linkId)
+            if (!active)
+                return undefined
+            return await active.conn.request(t, b, timeoutMs)
+        }
+        catch (err) {
+            // timeout and closed session are expected: the caller treats both as "no reply"
+            this.logEvent({ message: 'local-link request failed', t, code: err instanceof LinkConnectionError ? err.code : 'protocol' })
             return undefined
-        return await active.conn.request(t, b, timeoutMs)
+        }
     }
 
     /**
@@ -305,34 +405,61 @@ export class LocalLinkClientService extends IncyclistService {
      * Android. `undefined` if media is unavailable (no session, or Android without the pipe binding).
      */
     async getMediaBaseUrl(linkId: string): Promise<string | undefined> {
-        return (await this.getMedia(linkId))?.baseUrl
+        try {
+            return (await this.getMedia(linkId))?.baseUrl
+        }
+        catch (err) {
+            this.logError(err as Error, 'getMediaBaseUrl')
+            return undefined
+        }
     }
 
     /** true if media can be played on this platform with the bindings that are present */
     isMediaAvailable(): boolean {
-        return this.media.isAvailable()
+        try {
+            return this.media.isAvailable()
+        }
+        catch (err) {
+            this.logError(err as Error, 'isMediaAvailable')
+            return false
+        }
     }
 
     /** iOS: route media through the loopback pipe as well (default: direct HTTP). */
     setMediaPipeEnabled(enabled: boolean): void {
-        this.media.setPipeEnabled(enabled)
+        try {
+            this.media.setPipeEnabled(enabled)
+        }
+        catch (err) {
+            this.logError(err as Error, 'setMediaPipeEnabled')
+        }
     }
 
     /** Stops the loopback pipe of one computer, or all: call when no media is needed any more. */
     async releaseMedia(linkId?: string): Promise<void> {
-        await this.media.release(linkId)
+        try {
+            await this.media.release(linkId)
+        }
+        catch (err) {
+            this.logError(err as Error, 'releaseMedia')
+        }
     }
 
     reset() {
-        this.browse?.cancel()
-        this.pairingFlow.cancel()
-        for (const linkId of [...this.reconnects.keys()])
-            this.cancelReconnect(linkId)
-        for (const linkId of [...this.sessions.keys()])
-            this.closeSession(linkId)
-        this.media.release().catch(() => undefined)
-        this.gate.reset()
-        super.reset()
+        try {
+            this.browse?.cancel()
+            this.pairingFlow.cancel()
+            for (const linkId of [...this.reconnects.keys()])
+                this.cancelReconnect(linkId)
+            for (const linkId of [...this.sessions.keys()])
+                this.closeSession(linkId)
+            this.media.release().catch(() => undefined)
+            this.gate.reset()
+            super.reset()
+        }
+        catch (err) {
+            this.logError(err as Error, 'reset')
+        }
     }
 
     // --- gating ---
@@ -353,16 +480,23 @@ export class LocalLinkClientService extends IncyclistService {
         try {
             return getBindings()?.appInfo?.hasNativeFeature?.(NATIVE_FEATURE_LOCAL_LINK) === true
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'meetsNativeRequirements')
             return false
         }
     }
 
     protected getPlatform(): LinkClientPlatform {
-        const platform = getBindings()?.appInfo?.getOS()?.platform
-        if (platform === 'ios' || platform === 'android')
-            return platform
-        return 'other'
+        try {
+            const platform = getBindings()?.appInfo?.getOS()?.platform
+            if (platform === 'ios' || platform === 'android')
+                return platform
+            return 'other'
+        }
+        catch (err) {
+            this.logError(err as Error, 'getPlatform')
+            return 'other'
+        }
     }
 
     /** Why the network must not be browsed right now, or `undefined` if the app is idle. */
@@ -379,14 +513,20 @@ export class LocalLinkClientService extends IncyclistService {
         return undefined
     }
 
-    protected ready(): Promise<void> {
-        if (!this.isSupported())
-            return Promise.resolve()
-        this.loading ??= this.store.load().catch(err => {
+    protected async ready(): Promise<void> {
+        try {
+            if (!this.isSupported())
+                return
+            this.loading ??= this.store.load().catch(err => {
+                this.loading = undefined
+                this.logError(err, 'load')
+            })
+            await this.loading
+        }
+        catch (err) {
             this.loading = undefined
-            this.logError(err, 'load')
-        })
-        return this.loading
+            this.logError(err as Error, 'ready')
+        }
     }
 
     // --- search ---
@@ -413,25 +553,30 @@ export class LocalLinkClientService extends IncyclistService {
     }
 
     protected onFound(found: BrowseResult, hasLinks: boolean): void {
-        const id = `${found.host}:${found.port}`
-        const { displayName, suffix } = parseInstanceName(found.name)
-        let computer = this.discovered.get(id)
-        if (computer) {
-            computer.name = found.name
-            computer.displayName = displayName
-            computer.suffix = suffix
-            // what an earlier search found out about this address may no longer hold
-            delete computer.linkId
+        try {
+            const id = `${found.host}:${found.port}`
+            const { displayName, suffix } = parseInstanceName(found.name)
+            let computer = this.discovered.get(id)
+            if (computer) {
+                computer.name = found.name
+                computer.displayName = displayName
+                computer.suffix = suffix
+                // what an earlier search found out about this address may no longer hold
+                delete computer.linkId
+            }
+            else {
+                computer = { id, name: found.name, displayName, suffix, ambiguous: false, host: found.host, port: found.port, recognizing: false }
+                this.discovered.set(id, computer)
+            }
+            this.searchResults.push(computer)
+            this.markAmbiguous()
+            this.emitState()
+            if (hasLinks)
+                this.recognitions.set(id, this.recognize(computer))
         }
-        else {
-            computer = { id, name: found.name, displayName, suffix, ambiguous: false, host: found.host, port: found.port, recognizing: false }
-            this.discovered.set(id, computer)
+        catch (err) {
+            this.logError(err as Error, 'onFound')
         }
-        this.searchResults.push(computer)
-        this.markAmbiguous()
-        this.emitState()
-        if (hasLinks)
-            this.recognitions.set(id, this.recognize(computer))
     }
 
     protected markAmbiguous(): void {
@@ -497,9 +642,14 @@ export class LocalLinkClientService extends IncyclistService {
         const access = this.getDeviceAccess()
         let interrupted = false
         const onScan = (state: string) => {
-            if (state === 'start-requested' || state === 'started') {
-                interrupted = true
-                browse.cancel()
+            try {
+                if (state === 'start-requested' || state === 'started') {
+                    interrupted = true
+                    browse.cancel()
+                }
+            }
+            catch (err) {
+                this.logError(err as Error, 'onScanStateChanged')
             }
         }
         try {
@@ -609,6 +759,7 @@ export class LocalLinkClientService extends IncyclistService {
 
     // --- connections and sessions ---
 
+    // throws if the platform cannot create a socket: every caller (probe, pairing flow) handles that
     protected createConnection(): LinkClientConnection {
         return new LinkClientConnection((getBindings().wifi as LinkWifiBinding).net.createSocket())
     }
@@ -663,7 +814,7 @@ export class LocalLinkClientService extends IncyclistService {
         }
         const active: ActiveSession = { conn, info, intentional: false }
         this.sessions.set(link.linkId, active)
-        conn.on('message', msg => this.emit('push', { linkId: link.linkId, message: msg }))
+        conn.on('message', msg => this.onPush(link.linkId, msg))
         conn.on('close', () => this.onSessionClosed(link.linkId, active))
         conn.listen()
         conn.startKeepalive()
@@ -672,7 +823,12 @@ export class LocalLinkClientService extends IncyclistService {
             lastAddress: { host, controlPort: port }, lastSeenAt: Date.now(), protocolVersion: result.version,
         }).catch(err => this.logError(err, 'adoptSession'))
         this.logEvent({ message: 'local-link session established' })
-        this.emit('session-changed', { linkId: link.linkId, session: this.getSession(link.linkId) })
+        try {
+            this.emit('session-changed', { linkId: link.linkId, session: this.getSession(link.linkId) })
+        }
+        catch (err) {
+            this.logError(err as Error, 'adoptSession')
+        }
         this.emitState()
     }
 
@@ -684,31 +840,57 @@ export class LocalLinkClientService extends IncyclistService {
         active.conn.close()
     }
 
+    protected onPush(linkId: string, message: LinkServerMessage): void {
+        try {
+            this.emit('push', { linkId, message })
+        }
+        catch (err) {
+            this.logError(err as Error, 'onPush')
+        }
+    }
+
     protected onSessionClosed(linkId: string, active: ActiveSession): void {
-        if (this.sessions.get(linkId) !== active)
-            return
-        this.sessions.delete(linkId)
-        this.emit('session-changed', { linkId, session: undefined })
-        this.emitState()
-        if (!active.intentional)
-            this.scheduleReconnect(linkId)
+        try {
+            if (this.sessions.get(linkId) !== active)
+                return
+            this.sessions.delete(linkId)
+            this.emit('session-changed', { linkId, session: undefined })
+            this.emitState()
+            if (!active.intentional)
+                this.scheduleReconnect(linkId)
+        }
+        catch (err) {
+            this.logError(err as Error, 'onSessionClosed')
+        }
     }
 
     /** After a lost session the saved address is tried again a few times; the network is not browsed. */
     protected scheduleReconnect(linkId: string): void {
-        const state = this.reconnects.get(linkId) ?? { attempt: 0 }
-        const delay = RECONNECT_DELAYS_MS[state.attempt]
-        if (delay === undefined || !this.store.get(linkId)) {
-            this.reconnects.delete(linkId)
-            return
+        try {
+            const state = this.reconnects.get(linkId) ?? { attempt: 0 }
+            const delay = RECONNECT_DELAYS_MS[state.attempt]
+            if (delay === undefined || !this.store.get(linkId)) {
+                this.reconnects.delete(linkId)
+                return
+            }
+            state.attempt++
+            state.timer = setTimeout(() => this.onReconnectTimer(linkId), delay)
+            this.reconnects.set(linkId, state)
         }
-        state.attempt++
-        state.timer = setTimeout(() => {
+        catch (err) {
+            this.logError(err as Error, 'scheduleReconnect')
+        }
+    }
+
+    protected onReconnectTimer(linkId: string): void {
+        try {
             this.ensureSession(linkId)
                 .then(session => { if (!session) this.scheduleReconnect(linkId) })
                 .catch(err => this.logError(err, 'reconnect'))
-        }, delay)
-        this.reconnects.set(linkId, state)
+        }
+        catch (err) {
+            this.logError(err as Error, 'reconnect')
+        }
     }
 
     protected cancelReconnect(linkId: string): void {
@@ -720,6 +902,16 @@ export class LocalLinkClientService extends IncyclistService {
 
     /** `paired` arrived: the secret goes to secure storage, the record to the repository. */
     protected async savePaired(target: PairTarget, body: PairedBody): Promise<LinkPairingFailure | undefined> {
+        try {
+            return await this.doSavePaired(target, body)
+        }
+        catch (err) {
+            this.logError(err as Error, 'savePaired')
+            return 'storage-unavailable'
+        }
+    }
+
+    protected async doSavePaired(target: PairTarget, body: PairedBody): Promise<LinkPairingFailure | undefined> {
         const record = this.toRecord(target, body)
         if (!record || !fromBase64Url(body.secret)?.length)
             return 'connection-lost'
@@ -778,10 +970,25 @@ export class LocalLinkClientService extends IncyclistService {
     }
 
     protected getClientName(): string {
-        const platform = this.getPlatform()
-        if (platform === 'ios')
-            return 'iOS device'
-        return platform === 'android' ? 'Android device' : DEFAULT_PHONE_NAME
+        try {
+            const platform = this.getPlatform()
+            if (platform === 'ios')
+                return 'iOS device'
+            return platform === 'android' ? 'Android device' : DEFAULT_PHONE_NAME
+        }
+        catch (err) {
+            this.logError(err as Error, 'getClientName')
+            return DEFAULT_PHONE_NAME
+        }
+    }
+
+    protected logPairing(message: string, data?: Record<string, unknown>): void {
+        try {
+            this.logEvent({ message: `local-link ${message}`, ...data })
+        }
+        catch (err) {
+            this.logError(err as Error, 'logPairing')
+        }
     }
 
     // --- display ---

@@ -1,3 +1,4 @@
+import { EventLogger } from 'gd-eventlog'
 import type { PairFailedBody } from '../types'
 import {
     PAIR_RATE_GLOBAL, PAIR_RATE_PER_PEER, PAIR_RATE_WINDOW_MS, PAIRING_MAX_ATTEMPTS, PAIRING_TTL_SECONDS,
@@ -42,7 +43,13 @@ export class LinkPairing {
     protected peerLimiter = new SlidingWindowLimiter(PAIR_RATE_PER_PEER, PAIR_RATE_WINDOW_MS)
     protected globalLimiter = new SlidingWindowLimiter(PAIR_RATE_GLOBAL, PAIR_RATE_WINDOW_MS)
 
+    protected logger = new EventLogger('LinkPairing')
+
     constructor(protected hooks: LinkPairingHooks) {}
+
+    protected logError(err: Error, fn: string): void {
+        this.logger.logEvent({ message: 'Error', fn, error: err?.message, stack: err?.stack })
+    }
 
     isOpen(): boolean {
         return this.opened
@@ -209,12 +216,17 @@ export class LinkPairing {
     }
 
     protected expire(pending: PendingRequest): void {
-        if (this.pending !== pending)
-            return
-        this.finish(pending, { outcome: 'expired' })
-        this.notice = 'expired'
-        this.hooks.notify(pending.connectionId, { outcome: 'expired' })
-        this.hooks.onChange()
+        try {
+            if (this.pending !== pending)
+                return
+            this.finish(pending, { outcome: 'expired' })
+            this.notice = 'expired'
+            this.hooks.notify(pending.connectionId, { outcome: 'expired' })
+            this.hooks.onChange()
+        }
+        catch (err) {
+            this.logError(err as Error, 'expire')
+        }
     }
 
     /** Ends a request; later `pair-verify` calls for it get `outcome`. */

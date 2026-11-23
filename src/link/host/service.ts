@@ -84,7 +84,8 @@ export class LocalLinkService extends IncyclistService {
         try {
             return this.getAppState().hasFeature('BRIDGE_MODE') === true && this.getLink()?.isSupported() === true
         }
-        catch {
+        catch (err) {
+            this.logError(err as Error, 'isAvailable')
             return false
         }
     }
@@ -146,7 +147,12 @@ export class LocalLinkService extends IncyclistService {
 
     /** Turns down the outstanding pairing request. */
     denyPairing(): void {
-        this.pairing.deny()
+        try {
+            this.pairing.deny()
+        }
+        catch (err) {
+            this.logError(err as Error, 'denyPairing')
+        }
     }
 
     /** The on/off switch: off stops the transport and withdraws the announcement (persisted). */
@@ -171,16 +177,23 @@ export class LocalLinkService extends IncyclistService {
      * The name is visible to everyone on the network.
      */
     async setDisplayName(name: string): Promise<DisplayNameResult> {
-        if (!this.isAvailable())
+        try {
+            if (!this.isAvailable())
+                return { ok: false, error: 'unavailable' }
+            const valid = validateDisplayName(name)
+            if (!valid.ok)
+                return valid
+            this.getUserSettings().set(SETTINGS_KEY.displayName, valid.name ?? null)
+            if (this.running)
+                await this.announce().catch(err => this.logError(err, 'setDisplayName'))
+            this.emitState()
+            return { ok: true, name: this.getComputerName() }
+        }
+        catch (err) {
+            this.logError(err as Error, 'setDisplayName')
+            // fallback: the name could not be applied
             return { ok: false, error: 'unavailable' }
-        const valid = validateDisplayName(name)
-        if (!valid.ok)
-            return valid
-        this.getUserSettings().set(SETTINGS_KEY.displayName, valid.name ?? null)
-        if (this.running)
-            await this.announce().catch(err => this.logError(err, 'setDisplayName'))
-        this.emitState()
-        return { ok: true, name: this.getComputerName() }
+        }
     }
 
     /**
@@ -216,39 +229,59 @@ export class LocalLinkService extends IncyclistService {
 
     /** The user acknowledged the post-update firewall notice. */
     dismissFirewallNotice(): void {
-        this.firewallNotice = false
-        this.emitState()
+        try {
+            this.firewallNotice = false
+            this.emitState()
+        }
+        catch (err) {
+            this.logError(err as Error, 'dismissFirewallNotice')
+        }
     }
 
     /** Snapshot of everything the host UI renders. */
     getDisplayProps(): LocalLinkDisplayProps {
-        const available = this.isAvailable()
-        const clients = available ? this.getClients() : []
-        return {
-            available,
-            state: this.getState(clients.length),
-            computerName: this.getComputerName(),
-            suffix: this.running ? this.suffix : undefined,
-            platform: PLATFORMS[this.getBindings().appInfo?.getOS()?.platform],
-            routeCount: available ? this.getSharing().getRouteCount() : 0,
-            devices: clients.map(c => this.toDevice(c)),
-            pairingOpen: this.pairing.isOpen(),
-            connectWindow: available ? this.getConnectWindow() : undefined,
-            listeners: { ...this.listening },
-            startError: this.startError ? { ...this.startError } : undefined,
-            showUpdateFirewallNotice: this.firewallNotice,
+        try {
+            const available = this.isAvailable()
+            const clients = available ? this.getClients() : []
+            return {
+                available,
+                state: this.getState(clients.length),
+                computerName: this.getComputerName(),
+                suffix: this.running ? this.suffix : undefined,
+                platform: PLATFORMS[this.getBindings().appInfo?.getOS()?.platform],
+                routeCount: available ? this.getSharing().getRouteCount() : 0,
+                devices: clients.map(c => this.toDevice(c)),
+                pairingOpen: this.pairing.isOpen(),
+                connectWindow: available ? this.getConnectWindow() : undefined,
+                listeners: { ...this.listening },
+                startError: this.startError ? { ...this.startError } : undefined,
+                showUpdateFirewallNotice: this.firewallNotice,
+            }
+        }
+        catch (err) {
+            this.logError(err as Error, 'getDisplayProps')
+            // fallback: the feature renders as not available
+            return {
+                available: false, state: 'never-connected', computerName: DEFAULT_DISPLAY_NAME, routeCount: 0, devices: [],
+                pairingOpen: false, listeners: { control: false, media: false }, showUpdateFirewallNotice: false,
+            } as LocalLinkDisplayProps
         }
     }
 
     reset() {
-        this.unsubscribe?.()
-        this.unsubscribe = undefined
-        this.sharingListener?.()
-        clearTimeout(this.tokenTimer)
-        this.pairing.reset()
-        this.authLimiter.reset()
-        this.clearConnections()
-        super.reset()
+        try {
+            this.unsubscribe?.()
+            this.unsubscribe = undefined
+            this.sharingListener?.()
+            clearTimeout(this.tokenTimer)
+            this.pairing.reset()
+            this.authLimiter.reset()
+            this.clearConnections()
+            super.reset()
+        }
+        catch (err) {
+            this.logError(err as Error, 'reset')
+        }
     }
 
     // --- start / stop ---
@@ -360,15 +393,20 @@ export class LocalLinkService extends IncyclistService {
      * sharing service already debounces rebuilds; the version check drops repeats.
      */
     protected onCatalogChanged(catalogVersion?: string): void {
-        this.emitState()
-        if (!this.running || !catalogVersion || catalogVersion === this.pushedCatalogVersion)
-            return
-        this.pushedCatalogVersion = catalogVersion
-        for (const conn of [...this.connections.values()]) {
-            if (!conn.clientId)
-                continue
-            this.send(conn, 'catalog-changed', { catalogVersion })
-                .catch(err => this.logError(err as Error, 'pushCatalogChanged'))
+        try {
+            this.emitState()
+            if (!this.running || !catalogVersion || catalogVersion === this.pushedCatalogVersion)
+                return
+            this.pushedCatalogVersion = catalogVersion
+            for (const conn of [...this.connections.values()]) {
+                if (!conn.clientId)
+                    continue
+                this.send(conn, 'catalog-changed', { catalogVersion })
+                    .catch(err => this.logError(err as Error, 'pushCatalogChanged'))
+            }
+        }
+        catch (err) {
+            this.logError(err as Error, 'onCatalogChanged')
         }
     }
 
@@ -394,7 +432,12 @@ export class LocalLinkService extends IncyclistService {
         if (this.unsubscribe)
             return
         this.unsubscribe = link.onEvent(e => {
-            this.onLinkEvent(e).catch(err => this.logError(err, 'onLinkEvent'))
+            try {
+                this.onLinkEvent(e).catch(err => this.logError(err, 'onLinkEvent'))
+            }
+            catch (err) {
+                this.logError(err as Error, 'onLinkEvent')
+            }
         })
     }
 
@@ -453,13 +496,18 @@ export class LocalLinkService extends IncyclistService {
     }
 
     protected onDeadline(conn: LinkConnection): void {
-        conn.deadline = undefined
-        if (conn.clientId || this.connections.get(conn.id) !== conn)
-            return
-        if (this.pairing.hasPendingFor(conn.id))
-            return this.armDeadline(conn, PAIRING_TTL_SECONDS * 1000)
-        this.logEvent({ message: 'local-link connection closed', reason: 'auth-timeout' })
-        this.closeConnection(conn.id, 'auth-timeout').catch(() => undefined)
+        try {
+            conn.deadline = undefined
+            if (conn.clientId || this.connections.get(conn.id) !== conn)
+                return
+            if (this.pairing.hasPendingFor(conn.id))
+                return this.armDeadline(conn, PAIRING_TTL_SECONDS * 1000)
+            this.logEvent({ message: 'local-link connection closed', reason: 'auth-timeout' })
+            this.closeConnection(conn.id, 'auth-timeout').catch(() => undefined)
+        }
+        catch (err) {
+            this.logError(err as Error, 'onDeadline')
+        }
     }
 
     protected dropConnection(connectionId: string): LinkConnection | undefined {
@@ -592,9 +640,14 @@ export class LocalLinkService extends IncyclistService {
     }
 
     protected pushPairFailed(connectionId: string, body: PairFailedBody): void {
-        const conn = this.connections.get(connectionId)
-        if (conn)
-            this.send(conn, 'pair-failed', body).catch(err => this.logError(err, 'pushPairFailed'))
+        try {
+            const conn = this.connections.get(connectionId)
+            if (conn)
+                this.send(conn, 'pair-failed', body).catch(err => this.logError(err, 'pushPairFailed'))
+        }
+        catch (err) {
+            this.logError(err as Error, 'pushPairFailed')
+        }
     }
 
     // --- authentication frames ---
@@ -702,11 +755,18 @@ export class LocalLinkService extends IncyclistService {
         const next = this.getAuth().tokens.reduce<number | undefined>((min, t: StoredMediaToken) => min === undefined ? t.expiresAt : Math.min(min, t.expiresAt), undefined)
         if (next === undefined || !this.running)
             return
-        this.tokenTimer = setTimeout(() => {
+        this.tokenTimer = setTimeout(() => this.onTokenTimer(), Math.max(0, Math.min(next - Date.now(), 2 ** 31 - 1)))
+    }
+
+    protected onTokenTimer(): void {
+        try {
             if (this.pruneExpiredTokens())
                 this.getSharing().setTokens(this.publishedTokens()).catch(err => this.logError(err, 'tokenExpiry'))
             this.scheduleTokenExpiry()
-        }, Math.max(0, Math.min(next - Date.now(), 2 ** 31 - 1)))
+        }
+        catch (err) {
+            this.logError(err as Error, 'tokenExpiry')
+        }
     }
 
     // --- connections ---
