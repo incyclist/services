@@ -5,6 +5,7 @@ import { useLocalLinkClient } from '../../../link/client/service'
 import type { LinkMediaAccess, LinkReachability } from '../../../link/client/types'
 import { fileUrlToPath } from '../../base/parsers/utils'
 import type { SharedRouteEntry } from '../types'
+import { selectCandidateRows } from './markers'
 import { PROBE_TIMEOUT_MS, UNREACHABLE_TTL_MS } from './consts'
 import { useRouteSharingClient } from './service'
 import type {
@@ -89,7 +90,7 @@ export class RouteVideoResolver extends IncyclistService {
             if (local)
                 return { source: 'local', url: local }
 
-            const linked = await this.resolveFromLinks(route.id!, opts.skipLinks ?? [])
+            const linked = await this.resolveFromLinks(route, opts.skipLinks ?? [])
             if (linked)
                 return { source: 'link', ...linked }
 
@@ -116,7 +117,7 @@ export class RouteVideoResolver extends IncyclistService {
                 return { canStart: false, availability: 'unavailable' }
             if ((route.isDownloaded) && route.videoUrl && !isRemote(route.videoUrl))
                 return { canStart: true, availability: 'local' }
-            const linkId = this.getConnectedLinks(route.id!, [])[0]?.linkId
+            const linkId = this.getConnectedLinks(route, [])[0]?.linkId
             if (linkId)
                 return { canStart: true, availability: 'fromLink', linkId }
             return { canStart: true, availability: 'remote' }
@@ -218,8 +219,8 @@ export class RouteVideoResolver extends IncyclistService {
      * - a connected computer that offers the video (`linkSources`): `fromLink` with its name;
      * - the video is remote (`requiresDownload`), or nothing is known about the video yet: `remote`
      *   (nothing is shown);
-     * - `unavailable` only if the markers prove that there is no source: not downloadable, no remote url,
-     *   no computer.
+     * - never `unavailable`: the markers can not prove that there is no source (a streamed route's list
+     *   summary may lack the url), so the neutral state is the contract.
      */
     protected getOtherAvailability(route: VideoSourceInput, links: LinkSnapshot): RouteAvailability {
         if (route.isLocal || route.isDownloaded)
@@ -231,8 +232,8 @@ export class RouteVideoResolver extends IncyclistService {
 
         if (route.hasVideo === false)
             return { canStart: true, availability: 'local' }
-        if (route.requiresDownload === false && this.getRemoteUrl(route) === undefined)
-            return { canStart: false, availability: 'unavailable', unavailableReason: 'noSource' }
+        // The list summary may lack the remote url of a streamed route, and the markers can not prove that
+        // there is no source: neutral, no label. (`unavailable` is only reported for routes of a computer.)
         return { canStart: true, availability: 'remote' }
     }
 
@@ -299,15 +300,22 @@ export class RouteVideoResolver extends IncyclistService {
     }
 
     /** Candidate rows of the computers that are usable now, in the order they are tried. */
-    protected getCandidates(routeKey: string, skip: string[], links: LinkSnapshot = this.getLinkSnapshot()): SharedRouteEntry[] {
+    protected getCandidates(route: VideoSourceInput, skip: string[], links: LinkSnapshot = this.getLinkSnapshot()): SharedRouteEntry[] {
         const connected = (r: SharedRouteEntry) => links.get(r.linkId)?.connected === true
-        return this.getSharingClient().getRowsForRoute(routeKey)
+        return this.getRowsOfRoute(route)
             .filter(r => links.has(r.linkId) && !skip.includes(r.linkId) && (connected(r) || !this.isRecentlyUnreachable(r.linkId)))
             .sort((a, b) => Number(connected(b)) - Number(connected(a)) || links.get(b.linkId)!.lastSeenAt - links.get(a.linkId)!.lastSeenAt)
     }
 
-    protected getConnectedLinks(routeKey: string, skip: string[], links: LinkSnapshot = this.getLinkSnapshot()): SharedRouteEntry[] {
-        return this.getCandidates(routeKey, skip, links).filter(r => links.get(r.linkId)?.connected)
+    /** the rows of the computers that offer the route: the same rule the marker uses */
+    protected getRowsOfRoute(route: VideoSourceInput): SharedRouteEntry[] {
+        const client = this.getSharingClient()
+        const rows = [...client.getRowsForRoute(route.id!), ...(route.routeHash ? client.getRowsForRoute(route.routeHash) : [])]
+        return selectCandidateRows(rows, route.id, route.routeHash)
+    }
+
+    protected getConnectedLinks(route: VideoSourceInput, skip: string[], links: LinkSnapshot = this.getLinkSnapshot()): SharedRouteEntry[] {
+        return this.getCandidates(route, skip, links).filter(r => links.get(r.linkId)?.connected)
     }
 
     protected isRecentlyUnreachable(linkId: string): boolean {
@@ -315,8 +323,8 @@ export class RouteVideoResolver extends IncyclistService {
         return at !== undefined && Date.now() - at < UNREACHABLE_TTL_MS
     }
 
-    protected async resolveFromLinks(routeKey: string, skip: string[]): Promise<{ url: string, linkId: string } | undefined> {
-        for (const row of this.getCandidates(routeKey, skip)) {
+    protected async resolveFromLinks(route: VideoSourceInput, skip: string[]): Promise<{ url: string, linkId: string } | undefined> {
+        for (const row of this.getCandidates(route, skip)) {
             const url = await this.probe(row)
             if (url)
                 return { url, linkId: row.linkId }

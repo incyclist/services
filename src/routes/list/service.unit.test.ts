@@ -2082,6 +2082,14 @@ describe('RouteListService',()=>{
             expect((service as any).db.save).toHaveBeenCalledWith(route, true)
         })
 
+        test('addRoute and addRoutes tell the route sharing that routes were added',()=>{
+            const added = jest.fn()
+            service.on('routes-added',added)
+            service.addRoute(shared())
+            service.addRoutes([new Route({ ...shared().description, title:'Renamed' })])
+            expect(added).toHaveBeenCalledTimes(2)
+        })
+
         describe('updateLinkSources',()=>{
             const own = () => new Route({ id:'o1', routeHash:'h1', title:'Own', isLocal:false, hasVideo:true, requiresDownload:true, distance:5000, country:'DE' })
 

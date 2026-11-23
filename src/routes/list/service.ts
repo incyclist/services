@@ -1087,6 +1087,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         try {
             if (this.addRouteToLists(route,source))
                 this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+            this.emit('routes-added')
         }
         catch(err:any) {
             this.logError(err,'addRoute')
@@ -1108,6 +1109,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             })
             if (added)
                 this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+            this.emit('routes-added')
         }
         catch(err:any) {
             this.logError(err,'addRoutes')
@@ -1445,8 +1447,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const observer = this.api.loadServer(key)
             observer.on('route.added', this.addFromApi.bind(this))
             observer.on('route.updated', this.update.bind(this))
-            observer.once('done', ()=>{ done() })
-            observer.once('stopped', ()=>{ done() })
+            observer.once('done', ()=>{ this.emit('api-reload-done'); done() })
+            observer.once('stopped', ()=>{ this.emit('api-reload-done'); done() })
         })
     }
 
@@ -2348,6 +2350,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 if (isCompleted)
                     return
                 isCompleted = true
+                this.emit('api-reload-done')
                 done()
             }
 

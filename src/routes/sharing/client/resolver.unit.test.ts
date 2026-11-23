@@ -67,6 +67,42 @@ describe('RouteVideoResolver', () => {
         jest.clearAllMocks()
     })
 
+    describe('candidate rows: the same rule as the marker (id or routeHash, no missed rows)', () => {
+        const hashed: VideoSourceInput = { ...official, routeHash: 'h1' }
+
+        beforeEach(() => {
+            sharing.getRowsForRoute.mockImplementation((key: string) => rows.filter(r => r.routeKey === key))
+        })
+
+        test('a route that matches only by routeHash plays from the computer', async () => {
+            rows = [row('A', 'h1')]
+            sessions.add('A')
+            expect(await resolver.resolve(hashed)).toMatchObject({ source: 'link', linkId: 'A' })
+        })
+
+        test('list availability and resolve() agree on a hash-only match', async () => {
+            rows = [row('A', 'h1')]
+            sessions.add('A')
+            expect(resolver.getAvailability(hashed)).toMatchObject({ availability: 'fromLink', linkId: 'A' })
+            expect(resolver.hasLinkSource(hashed)).toBe(true)
+            expect((await resolver.resolve(hashed)).source).toBe('link')
+        })
+
+        test('a row that was missed does not count, neither for availability nor for playback', async () => {
+            rows = [{ ...row('A', 'r1'), missCount: 1 }]
+            sessions.add('A')
+            expect(resolver.hasLinkSource(official)).toBe(false)
+            expect((await resolver.resolve(official)).source).toBe('remote')
+        })
+
+        test('a computer that has the route by id and by hash is tried once', async () => {
+            rows = [row('A', 'r1'), row('A', 'h1')]
+            sessions.add('A')
+            await resolver.resolve(hashed)
+            expect(fetchMock).toHaveBeenCalledTimes(1)
+        })
+    })
+
     describe('resolve', () => {
         test('a local copy wins over everything', async () => {
             rows = [row('A')]
@@ -394,8 +430,8 @@ describe('RouteVideoResolver', () => {
                 expect(resolver.getRouteAvailability({ ...marked, isLocal: true, linkSources: ['A'] })).toEqual({ canStart: true, availability: 'local' })
             })
 
-            test('the markers prove there is no source: unavailable/noSource', () => {
-                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: false })).toEqual({ canStart: false, availability: 'unavailable', unavailableReason: 'noSource' })
+            test('requiresDownload false without a url in the summary: neutral (the list summary may lack the url), never unavailable', () => {
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: false })).toEqual({ canStart: true, availability: 'remote' })
             })
 
             test('a remote url keeps a route that is not downloadable streamable', () => {

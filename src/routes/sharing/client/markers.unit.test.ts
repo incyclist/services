@@ -1,7 +1,7 @@
 import { Route } from '../../base/model/route'
 import type { RouteInfo } from '../../base/types'
 import type { SharedRouteEntry } from '../types'
-import { RouteLinkMarker } from './markers'
+import { RouteLinkMarker, selectCandidateRows } from './markers'
 
 const row = (linkId: string, routeKey: string, missCount = 0): SharedRouteEntry => ({
     linkId, routeKey, routeIdOnComputer: routeKey, videoHandle: `h-${linkId}-${routeKey}`, videoFormat: 'mp4', size: 1, mtime: 1, lastConfirmedAt: 1, missCount,
@@ -37,6 +37,21 @@ describe('RouteLinkMarker', () => {
 
         expect(marker.reconcile()).toBe(2)
         expect(updateLinkSources).toHaveBeenCalledWith([{ id: 'a', linkSources: ['L1', 'L2'] }, { id: 'b', linkSources: ['L1', 'L2'] }])
+    })
+
+    test('a row of a computer that was missed does not count, but the same route is still offered by the other computer', () => {
+        add({ id: 'a', routeHash: 'ha', title: 'A' })
+        rows = [row('L1', 'ha', 1), row('L2', 'a'), row('L3', 'ha')]
+        marker.reconcile()
+        expect(updateLinkSources).toHaveBeenCalledWith([{ id: 'a', linkSources: ['L2', 'L3'] }])
+    })
+
+    test('clear(): the feature is not available, every marker is removed, whatever the rows say', () => {
+        add({ id: 'a', title: 'A', linkSources: ['L1'] })
+        add({ id: 'b', title: 'B' })
+        rows = [row('L1', 'a')]
+        expect(marker.clear()).toBe(1)
+        expect(updateLinkSources).toHaveBeenCalledWith([{ id: 'a', linkSources: [] }])
     })
 
     test('unchanged markers cause no update at all', () => {
@@ -86,5 +101,18 @@ describe('RouteLinkMarker', () => {
         expect(Date.now() - started).toBeLessThan(1000)
         expect(getRows).toHaveBeenCalledTimes(1)
         expect(updateLinkSources).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('selectCandidateRows', () => {
+    const r = (linkId: string, routeKey: string, missCount = 0): SharedRouteEntry => row(linkId, routeKey, missCount)
+
+    test('matches by id or routeHash, ignores missed rows and foreign keys, returns a computer once per key', () => {
+        const rows = [r('A', 'id'), r('A', 'id'), r('B', 'h'), r('C', 'h', 2), r('D', 'other')]
+        expect(selectCandidateRows(rows, 'id', 'h').map(x => `${x.linkId}:${x.routeKey}`)).toEqual(['A:id', 'B:h'])
+    })
+
+    test('without a routeHash only the id matches', () => {
+        expect(selectCandidateRows([r('A', 'id'), r('B', 'h')], 'id', undefined)).toHaveLength(1)
     })
 })

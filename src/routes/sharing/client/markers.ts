@@ -17,6 +17,25 @@ export interface MarkerDeps {
     logError: (err: Error, fn: string) => void
 }
 
+/**
+ * THE rule that decides which saved rows of the computers offer a route: the row is keyed by the id
+ * or by the `routeHash` of the route, and it was not missed in the last sync of its computer.
+ * The marker, the playback and the availability all use it, so the list and the player agree.
+ * A computer that has the route by id and by hash is returned once per key.
+ */
+export const selectCandidateRows = (rows: SharedRouteEntry[], id: string | undefined, routeHash?: string): SharedRouteEntry[] => {
+    const seen = new Set<string>()
+    return rows.filter(row => {
+        if (row.missCount > 0 || !(row.routeKey === id || (!!routeHash && row.routeKey === routeHash)))
+            return false
+        const key = `${row.linkId}\u0000${row.routeKey}`
+        if (seen.has(key))
+            return false
+        seen.add(key)
+        return true
+    })
+}
+
 const sameList = (a: string[], b: string[]): boolean => a.length === b.length && a.every((v, i) => v === b[i])
 
 /**
@@ -42,19 +61,36 @@ export class RouteLinkMarker {
      * (call again when it is). Never throws.
      */
     reconcile(): number | undefined {
+        return this.run(false)
+    }
+
+    /**
+     * Removes the markers of all routes (route sharing is not available on this device, so nothing
+     * must stay persisted in the descriptions).
+     *
+     * @returns the number of routes that changed, `undefined` if the route list is not loaded yet. Never throws.
+     */
+    clear(): number | undefined {
+        return this.run(true)
+    }
+
+    protected run(clear: boolean): number | undefined {
         try {
             const list = this.deps.getList()
             const routes = list.getAllRoutes()
             if (routes === undefined || list.isStillLoading())
                 return undefined
 
-            const sources = this.getSources()
+            const rows = clear ? [] : this.deps.getRows()
+            const byKey = new Map<string, SharedRouteEntry[]>()
+            for (const row of rows)
+                byKey.set(row.routeKey, [...(byKey.get(row.routeKey) ?? []), row])
             const updates: Array<{ id: string, linkSources: string[] }> = []
             for (const route of routes) {
                 const descr = route?.description
                 if (!descr?.id || descr.linkShared)
                     continue
-                const wanted = this.getWanted(sources, descr.id, descr.routeHash)
+                const wanted = this.getWanted(byKey, descr.id, descr.routeHash)
                 if (!sameList(wanted, [...(descr.linkSources ?? [])].sort()))
                     updates.push({ id: descr.id, linkSources: wanted })
             }
@@ -69,24 +105,9 @@ export class RouteLinkMarker {
         }
     }
 
-    /** the computers that offer a route, by the route key of the rows */
-    protected getSources(): Map<string, Set<string>> {
-        const sources = new Map<string, Set<string>>()
-        for (const row of this.deps.getRows()) {
-            if (row.missCount > 0)
-                continue
-            const linkIds = sources.get(row.routeKey) ?? new Set<string>()
-            linkIds.add(row.linkId)
-            sources.set(row.routeKey, linkIds)
-        }
-        return sources
-    }
-
-    protected getWanted(sources: Map<string, Set<string>>, id: string, routeHash?: string): string[] {
-        const byId = sources.get(id)
-        const byHash = routeHash ? sources.get(routeHash) : undefined
-        if (!byId && !byHash)
-            return []
-        return [...new Set([...(byId ?? []), ...(byHash ?? [])])].sort()
+    /** the sorted computers that offer a route; only the rows of its two keys are looked at */
+    protected getWanted(byKey: Map<string, SharedRouteEntry[]>, id: string, routeHash?: string): string[] {
+        const candidates = [...(byKey.get(id) ?? []), ...(routeHash ? byKey.get(routeHash) ?? [] : [])]
+        return [...new Set(selectCandidateRows(candidates, id, routeHash).map(r => r.linkId))].sort()
     }
 }

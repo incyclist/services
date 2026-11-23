@@ -42,3 +42,6 @@ export const COPY_STORAGE_MARGIN_BYTES = 500 * 1024 * 1024
 
 /** A list fetch does not repeat a descriptor load that ended `busy`, `timeout` or `404` for this long. */
 export const DESCRIPTOR_NEGATIVE_CACHE_MS = 60_000
+
+/** quiet time after the last added route before the markers are reconciled */
+export const RECONCILE_DELAY_MS = 500

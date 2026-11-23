@@ -271,6 +271,20 @@ describe('RoutesApiLoader', () => {
             expect(dbSave).toHaveBeenCalled()
         })
 
+        test('existing, outdated route: the linkSources marker of the sync survives the refresh', async () => {
+            dbGetDescription.mockReturnValue({ id: 'r1', version: 1, title: 'Old title', linkSources: ['A'] })
+            dbGetDetails.mockResolvedValue(detail())
+            setupApi({ gpx: [descr({ id: 'r1', version: 2 })] })
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+
+            const { added, updated } = await waitDone(service.load())
+
+            const refreshed = [...added, ...updated].map((r: any) => r?.description ?? r?.route?.description ?? r).find((d: any) => d?.id === 'r1')
+            expect(refreshed?.version).toBe(2)
+            expect(refreshed?.linkSources).toEqual(['A'])
+        })
+
         test('existing, up to date, local route: is skipped without persisting again', async () => {
             dbGetDescription.mockReturnValue({ id: 'r1', version: 2, isLocal: true })
             dbGetDetails.mockResolvedValue(detail())

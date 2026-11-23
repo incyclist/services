@@ -11,7 +11,7 @@ import { useRouteList } from '../../list/service'
 import type { CatalogDocument, CatalogEntry, SharedRouteEntry, SharedRouteSummary } from '../types'
 import {
     CATALOG_CHANGED_MESSAGE, CATALOG_TIMEOUT_MS, DESCRIPTOR_BUSY_RETRY_MS, DESCRIPTOR_DOWNLOAD_TIMEOUT_MS, DESCRIPTOR_NEGATIVE_CACHE_MS, DESCRIPTOR_REQUEST_TIMEOUT_MS,
-    HANDLE_PATTERN, ROUTE_HASH_PATTERN, SYNC_TIMEOUT_MS, UNREACHABLE_TTL_MS,
+    HANDLE_PATTERN, RECONCILE_DELAY_MS, ROUTE_HASH_PATTERN, SYNC_TIMEOUT_MS, UNREACHABLE_TTL_MS,
 } from './consts'
 import { DescriptorLoadError, getDescriptorDocument, parseDescriptor } from './descriptor'
 import { RouteLinkMarker } from './markers'
@@ -123,6 +123,8 @@ export class RouteSharingClientService extends IncyclistService {
     protected staleResynced = new Set<string>()
     protected unsubscribers: Unsubscribe[] = []
     protected started = false
+    protected markersCleared = false
+    protected reconcileTimer: ReturnType<typeof setTimeout> | undefined
     protected catalogs = new Map<string, CatalogEntry[]>()
     protected syncStates = new Map<string, LinkSyncState>()
     protected descriptorLoads = new Map<string, Promise<Route>>()
@@ -153,7 +155,11 @@ export class RouteSharingClientService extends IncyclistService {
     /** Loads the persisted rows and subscribes to the triggers. Does no network access. */
     async start(): Promise<void> {
         try {
-            if (this.started || !this.isActive())
+            if (!this.isActive()) {
+                this.clearMarkersWhenLoaded()
+                return
+            }
+            if (this.started)
                 return
             this.started = true
             await this.repo.load()
@@ -284,6 +290,8 @@ export class RouteSharingClientService extends IncyclistService {
     async onGone(linkId: string, routeKey: string): Promise<void> {
         try {
             await this.repo.recordGone(linkId, routeKey)
+            // a missed row does not count: the marker of the computer goes with it
+            this.reconcileMarkers()
         }
         catch (err) {
             this.logError(err as Error, 'onGone')
@@ -336,6 +344,9 @@ export class RouteSharingClientService extends IncyclistService {
             this.unsubscribers = []
             unsubscribers.forEach(u => this.unsubscribeSafely(u))
             this.started = false
+            this.markersCleared = false
+            clearTimeout(this.reconcileTimer)
+            this.reconcileTimer = undefined
             this.running.clear()
             this.unreachableAt.clear()
             this.staleResynced.clear()
@@ -379,6 +390,12 @@ export class RouteSharingClientService extends IncyclistService {
         }
         list.on('load-done', onLoaded)
         this.unsubscribers.push(() => list.off('load-done', onLoaded))
+
+        // routes that are added later (import, API refresh) and the end of an API reload can lose or miss a marker
+        const onRoutesChanged = () => this.scheduleReconcile()
+        list.on('routes-added', onRoutesChanged)
+        list.on('api-reload-done', onRoutesChanged)
+        this.unsubscribers.push(() => { list.off('routes-added', onRoutesChanged); list.off('api-reload-done', onRoutesChanged) })
     }
 
     protected onSessionChanged(e: { linkId: string, session?: LinkClientSession }): void {
@@ -425,6 +442,49 @@ export class RouteSharingClientService extends IncyclistService {
         }
         catch (err) {
             this.logError(err as Error, 'reconcileMarkers')
+        }
+    }
+
+    /**
+     * Reconciles the markers once a burst of route changes (an import, an API reload) is over: one reconcile
+     * for all of them, never during the burst. Never throws.
+     */
+    protected scheduleReconcile(): void {
+        try {
+            if (this.reconcileTimer)
+                return
+            this.reconcileTimer = setTimeout(() => {
+                this.reconcileTimer = undefined
+                this.repo.load().then(() => this.reconcileMarkers()).catch(err => this.logError(err, 'markers'))
+            }, RECONCILE_DELAY_MS)
+            this.reconcileTimer.unref?.()
+        }
+        catch (err) {
+            this.logError(err as Error, 'scheduleReconcile')
+        }
+    }
+
+    /**
+     * Route sharing is not available (toggle off, no bindings): the markers of an earlier session must not
+     * stay in the descriptions. Done once, as soon as the route list is loaded. Never throws.
+     */
+    protected clearMarkersWhenLoaded(): void {
+        try {
+            if (this.markersCleared)
+                return
+            this.markersCleared = true
+            // the list may be empty because it was not loaded yet: clear again when the load is done
+            this.marker.clear()
+            const list = this.getRouteList()
+            const onLoaded = () => {
+                list.off('load-done', onLoaded)
+                this.marker.clear()
+            }
+            list.on('load-done', onLoaded)
+            this.unsubscribers.push(() => list.off('load-done', onLoaded))
+        }
+        catch (err) {
+            this.logError(err as Error, 'clearMarkers')
         }
     }
 

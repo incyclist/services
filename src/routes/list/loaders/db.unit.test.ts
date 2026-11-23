@@ -751,7 +751,7 @@ describe('RoutesDbLoader.saveDescriptions', () => {
         ]
         db.routeHashes = {}
         db.write = jest.fn()
-        db.writeDetails = jest.fn()
+        db.writeDetails = jest.fn().mockResolvedValue(undefined)
         db.loadDetailRecord = jest.fn()
     })
 
@@ -772,6 +772,28 @@ describe('RoutesDbLoader.saveDescriptions', () => {
         expect(db.write).toHaveBeenCalledTimes(1)
         expect(db.writeDetails).not.toHaveBeenCalled()
         expect(db.loadDetailRecord).not.toHaveBeenCalled()
+    })
+
+    test('only linkSources is patched into the stored entry: other in-memory changes are not persisted by it, and a pending save() still writes the details', async () => {
+        db.routeHashes.a = JSON.stringify(db.routeDescriptions[0])
+        const a = new Route({ id: 'a', title: 'A changed in memory', hasVideo: true, requiresDownload: true, linkSources: ['L1'] } as any)
+
+        db.saveDescriptions([a])
+
+        expect(db.routeDescriptions[0]).toEqual({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true, linkSources: ['L1'] })
+        expect(db.routeHashes.a).toBe(JSON.stringify(db.routeDescriptions[0]))
+        expect(a.description.title).toBe('A changed in memory')
+
+        await db.save(a)
+
+        expect(db.routeDescriptions[0].title).toBe('A changed in memory')
+        expect(db.writeDetails).toHaveBeenCalledTimes(1)
+    })
+
+    test('an empty marker removes linkSources from the stored entry', () => {
+        db.routeDescriptions[0].linkSources = ['L1']
+        db.saveDescriptions([new Route({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true } as any)])
+        expect(db.routeDescriptions[0]).toEqual({ id: 'a', title: 'A', hasVideo: true, requiresDownload: true })
     })
 
     test('writes nothing if no route is persisted, and never throws', () => {

@@ -67,7 +67,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     }
 
     /**
-     * Persists the descriptions of routes whose description changed, and nothing else: the details
+     * Persists the `linkSources` marker of the given routes into their stored description, and nothing else: the details
      * of the routes are neither loaded nor written. Routes that are not in the repo yet are skipped
      * (their description is written when they are saved). All changes lead to one write of the repo.
      *
@@ -82,9 +82,15 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
                 const idx = index.get(id) ?? -1
                 if (idx===-1)
                     continue
-                const descr = this.buildRouteDBInfo(route.description)
-                this.routeDescriptions[idx] = clone(descr)
-                this.routeHashes[id] = JSON.stringify(descr)
+                // patch the stored entry only: other fields that changed in memory are persisted by their own
+                // save(), which must still see its change (the hash is the one of the patched stored entry)
+                const stored = this.routeDescriptions[idx]
+                const linkSources = route.description.linkSources
+                if (linkSources?.length>0)
+                    stored.linkSources = [...linkSources]
+                else
+                    delete stored.linkSources
+                this.routeHashes[id] = JSON.stringify(stored)
                 updated++
             }
             if (updated>0) {

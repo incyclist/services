@@ -74,6 +74,21 @@ describe('RouteDownloadService', () => {
             expect(emittedUrl).toBe('video://videos/FR_Galibier_Demo.mp4')
         })
 
+        test('the error log of a download without a parsable URL contains no linkIds of paired computers', async () => {
+            getBindings().path = { parse: () => undefined, join: path.join } as any
+            service = new RouteDownloadService()
+            const logSpy = jest.spyOn(service as any, 'logEvent').mockImplementation(() => undefined)
+
+            const route = new Route({ id: 'r3', title: 'Test Route', hasVideo: true, videoUrl: 'https://cdn/x.mp4', linkSources: ['secret-link-id'], points: [] } as any)
+            const observer = new DownloadObserver(Promise.resolve())
+            observer.on('error', () => undefined)
+            await service['downloadRoute'](route, './videos', observer)
+
+            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'no URL specified' }))
+            expect(JSON.stringify(logSpy.mock.calls)).not.toContain('secret-link-id')
+            expect(JSON.stringify(logSpy.mock.calls)).not.toContain('linkSources')
+        })
+
     })
 
     // a completed/failed download was never pruned from `this.downloads` (only stopDownload()

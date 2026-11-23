@@ -52,6 +52,8 @@ export interface ReplaceResult {
 /** The route properties the resolver and the availability check look at. */
 export interface VideoSourceInput {
     id?: string
+    /** the content hash of the route: a computer's row can match by it as well as by the id */
+    routeHash?: string
     hasVideo?: boolean
     isLocal?: boolean
     /** created from a computer's catalog: the video can only come from a computer */

@@ -639,6 +639,84 @@ describe('RouteSharingClientService', () => {
             expect(description(key)).not.toHaveProperty('linkSources')
         })
 
+        test('a computer that reports the video gone (missCount up): the next reconcile removes its marker', async () => {
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await service.syncAll()
+            expect(description('off1').linkSources).toEqual(['A'])
+
+            await service.onGone('A', 'off1')
+            expect(description('off1')).not.toHaveProperty('linkSources')
+        })
+
+        test('a route that is added (import, API refresh) gets its marker', async () => {
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await service.start()
+            await service.syncAll()
+            routes.push({ description: { id: 'late', routeHash: hash, title: 'Late', hasVideo: true } })
+            responses.set('http://A:1', catalog('a2', [official, byHash]))
+            client.media.set('A', access('A', 'a2'))
+            await service.syncAll()
+            updateLinkSources.mockClear()
+            delete description('off1').linkSources
+
+            list.emit('routes-added')
+            await jest.advanceTimersByTimeAsync(1000)
+            expect(description('off1').linkSources).toEqual(['A'])
+            expect(description('late').linkSources).toEqual(['A'])
+        })
+
+        test('a burst of added routes causes one reconcile', async () => {
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await service.start()
+            await service.syncAll()
+            const reconcile = jest.spyOn((service as unknown as { marker: { reconcile: () => number } }).marker, 'reconcile')
+            for (let i = 0; i < 50; i++)
+                list.emit('routes-added')
+            await jest.advanceTimersByTimeAsync(1000)
+            expect(reconcile).toHaveBeenCalledTimes(1)
+        })
+
+        test('a marker that was lost while the API reload ran is repaired when the reload is done', async () => {
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await service.start()
+            await service.syncAll()
+            delete description('off1').linkSources
+
+            list.emit('api-reload-done')
+            await jest.advanceTimersByTimeAsync(1000)
+            expect(description('off1').linkSources).toEqual(['A'])
+        })
+
+        test('the feature is off: the markers of an earlier session are cleared once the list is loaded', async () => {
+            description('off1').linkSources = ['A']
+            description('mine').linkSources = ['B']
+            client.supported = false
+            loaded = false
+            await service.start()
+            expect(description('off1').linkSources).toEqual(['A'])
+
+            loaded = true
+            list.emit('load-done')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(description('off1')).not.toHaveProperty('linkSources')
+            expect(description('mine')).not.toHaveProperty('linkSources')
+        })
+
+        test('the feature is off and the list is loaded already: cleared at start; nothing to do without markers', async () => {
+            description('off1').linkSources = ['A']
+            client.supported = false
+            await service.start()
+            expect(description('off1')).not.toHaveProperty('linkSources')
+
+            updateLinkSources.mockClear()
+            await service.start()
+            expect(updateLinkSources).not.toHaveBeenCalled()
+        })
+
         test('a failing route list never throws out of a sync', async () => {
             updateLinkSources.mockImplementation(() => { throw new Error('boom') })
             addLink('A')
