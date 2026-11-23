@@ -26,10 +26,27 @@ export const MEDIA_TOKEN_MARGIN_MS = 5 * 60_000
 export const RECONNECT_DELAYS_MS = [1000, 3000, 10_000]
 
 /**
- * Delays between the foreground retries of the saved address of a computer without an open
- * session (no browse involved). The last delay repeats until a session is open.
+ * Passive reconnect watch: while the app is in the foreground and a paired computer has no
+ * open session, the phone listens for the computer's announcement. Without a trainer rotation to
+ * join, the browse is duty-cycled: on for WATCH_ON_MS of every WATCH_PERIOD_MS, so that the
+ * Android multicast lock is not held permanently. The same period is the interval at which the
+ * watch re-checks its own conditions and re-arms itself.
  */
-export const BACKGROUND_RECONNECT_DELAYS_MS = [5000, 15_000, 30_000, 60_000]
+export const WATCH_ON_MS = 4000
+export const WATCH_PERIOD_MS = 20_000
+
+/**
+ * Probes caused by announcements. An announcement that does not turn out to be a paired computer
+ * is not probed again for WATCH_NEGATIVE_TTL_MS (WATCH_UNREACHABLE_TTL_MS if it did not answer),
+ * and one address is probed at most WATCH_MAX_PROBES_PER_ADDRESS times per WATCH_ADDRESS_WINDOW_MS,
+ * so that a foreign Incyclist computer is not probed on every scan round. These probes do not
+ * count against the recovery browse limits.
+ */
+export const WATCH_NEGATIVE_TTL_MS = 30 * 60_000
+export const WATCH_UNREACHABLE_TTL_MS = 30_000
+export const WATCH_MAX_PROBES_PER_ADDRESS = 3
+export const WATCH_ADDRESS_WINDOW_MS = 10 * 60_000
+export const WATCH_CACHE_MAX_ENTRIES = 100
 
 export const MAX_LOCAL_NAME_LENGTH = 40
 export const DEFAULT_PHONE_NAME = 'Phone'

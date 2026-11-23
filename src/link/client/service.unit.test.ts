@@ -10,6 +10,7 @@ import {
 } from '../../../__tests__/utils/linkFakes'
 import { LocalLinkService } from '../host/service'
 import { LinkClientConnection } from './connection'
+import * as consts from './consts'
 import { LocalLinkClientService } from './service'
 import type { LinkPairingState, LocalLinkClientDisplayProps } from './types'
 
@@ -46,6 +47,9 @@ const run = async <T>(promise: Promise<T>): Promise<T> => {
 
 class FakeAccess extends EventEmitter {
     scanning = false
+    /** the WiFi (Direct Connect) interface is connected: a trainer rotation runs that the watch can join */
+    wifiConnected = false
+    getInterface = (name: string) => name === 'wifi' ? { isConnected: () => this.wifiConnected } : undefined
     isScanning = () => this.scanning
     pauseBackgroundActivity = jest.fn(async (_owner?: string) => undefined)
     resumeBackgroundActivity = jest.fn(async (_owner?: string) => undefined)
@@ -67,7 +71,8 @@ describe('LocalLinkClientService', () => {
     let rideState: string
     let features: Record<string, boolean>
     let announced: Announcement[]
-    let mdns: { connect: jest.Mock, disconnect: jest.Mock, find: jest.Mock }
+    let mdns: { connect: jest.Mock, disconnect: jest.Mock, find: jest.Mock, stopFind?: jest.Mock }
+    let finders: Array<{ type?: string, cb: (a: Announcement) => void }>
     let platform: string
     let nativeFeatures: string[]
     let hasNativeFeature: ((name: string) => boolean) | undefined
@@ -100,6 +105,7 @@ describe('LocalLinkClientService', () => {
     const restartPhoneWithoutHost = async () => {
         client.reset()
         net.endpoints.delete(HOST_ID)
+        announced = []
         newClient()
         await client.init()
     }
@@ -112,9 +118,13 @@ describe('LocalLinkClientService', () => {
         secure = makeMemorySecureStorage()
         net = new FakeNetwork()
         announced = []
+        finders = []
         mdns = {
-            connect: jest.fn(), disconnect: jest.fn(),
-            find: jest.fn((_opts: unknown, cb: (a: Announcement) => void) => { announced.forEach(a => cb(a)) }),
+            connect: jest.fn(), disconnect: jest.fn(), stopFind: jest.fn(),
+            find: jest.fn((opts: { type?: string }, cb: (a: Announcement) => void) => {
+                finders.push({ type: opts?.type, cb })
+                announced.forEach(a => cb(a))
+            }),
         }
         platform = 'ios'
 
@@ -227,7 +237,8 @@ describe('LocalLinkClientService', () => {
                 phase: 'done', noneFound: false,
                 computers: [{ id: HOST_ID, displayName: 'Incyclist Computer', suffix: 'ABCD', ambiguous: false, host: HOST_ADDRESS, port: 6001 }],
             })
-            expect(mdns.disconnect).toHaveBeenCalled()
+            expect(mdns.stopFind).toHaveBeenCalledWith('incyclist', 'tcp')
+            expect(mdns.disconnect).not.toHaveBeenCalled()
         })
         test('shows the suffix of computers that share a display name', async () => {
             announced = [hostAnnouncement('ABCD'), { ...hostAnnouncement('WXYZ'), address: '192.168.1.21' }]
@@ -619,6 +630,8 @@ describe('LocalLinkClientService', () => {
 
     describe('bounded automatic recovery', () => {
         let linkId: string
+        /** watch listening is not a browse: only an exclusive use of the discovery counts */
+        const browses = () => access.pauseBackgroundActivity.mock.calls.filter(c => c[0] === 'local-link').length
 
         beforeEach(async () => {
             linkId = await pairPhone()
@@ -635,7 +648,7 @@ describe('LocalLinkClientService', () => {
 
             await run(client.check())
 
-            expect(mdns.find).toHaveBeenCalledTimes(1)
+            expect(browses()).toBe(1)
             expect(access.pauseBackgroundActivity).toHaveBeenCalledWith('local-link')
             expect(client.getSession(linkId)).toMatchObject({ host: '192.168.1.77' })
             expect((mem.files.get(linkId) as { lastAddress: unknown }).lastAddress).toEqual({ host: '192.168.1.77', controlPort: 6001 })
@@ -643,33 +656,33 @@ describe('LocalLinkClientService', () => {
         })
         test('at most once per 10 minutes and 3 times per session', async () => {
             await run(client.check())
-            expect(mdns.find).toHaveBeenCalledTimes(1)
+            expect(browses()).toBe(1)
 
             await run(client.check())
-            expect(mdns.find).toHaveBeenCalledTimes(1)
+            expect(browses()).toBe(1)
             expect(props().searchBlocked).toEqual({ reason: 'rate-limited', automatic: true })
             expect(props().recovery).toMatchObject({ autoBrowsesUsed: 1, autoBrowsesMax: 3, nextAutoBrowseAt: expect.any(Number) })
 
             await jest.advanceTimersByTimeAsync(10 * 60_000 + 1000)
             await run(client.check())
-            expect(mdns.find).toHaveBeenCalledTimes(2)
+            expect(browses()).toBe(2)
 
             await jest.advanceTimersByTimeAsync(10 * 60_000 + 1000)
             await run(client.check())
-            expect(mdns.find).toHaveBeenCalledTimes(3)
+            expect(browses()).toBe(3)
 
             await jest.advanceTimersByTimeAsync(10 * 60_000 + 1000)
             await run(client.check())
-            expect(mdns.find).toHaveBeenCalledTimes(3)
+            expect(browses()).toBe(3)
             expect(props().recovery).toMatchObject({ autoBrowsesUsed: 3, nextAutoBrowseAt: undefined })
             expect(props().searchBlocked).toEqual({ reason: 'rate-limited', automatic: true })
         })
         test('"check again" bypasses the window and the count', async () => {
             await run(client.check())
-            expect(mdns.find).toHaveBeenCalledTimes(1)
+            expect(browses()).toBe(1)
             for (let i = 0; i < 5; i++)
                 await run(client.check({ manual: true }))
-            expect(mdns.find).toHaveBeenCalledTimes(6)
+            expect(browses()).toBe(6)
             expect(props().recovery.autoBrowsesUsed).toBe(1)
         })
         test.each([
@@ -680,7 +693,7 @@ describe('LocalLinkClientService', () => {
             makeBusy()
             await run(client.check())
             await run(client.check({ manual: true }))
-            expect(mdns.find).not.toHaveBeenCalled()
+            expect(browses()).toBe(0)
             expect(access.pauseBackgroundActivity).not.toHaveBeenCalled()
             expect(props().searchBlocked).toEqual({ reason, automatic: false })
             // rows keep their last state
@@ -694,14 +707,14 @@ describe('LocalLinkClientService', () => {
 
             rideState = 'Idle'
             await run(client.check())
-            expect(mdns.find).toHaveBeenCalledTimes(1)
+            expect(browses()).toBe(1)
             expect(props().searchBlocked).toBeUndefined()
         })
         test('a search by the user starts the 10-minute window as well', async () => {
             await run(client.startSearch())
-            mdns.find.mockClear()
+            access.pauseBackgroundActivity.mockClear()
             await run(client.check())
-            expect(mdns.find).not.toHaveBeenCalled()
+            expect(browses()).toBe(0)
             expect(props().searchBlocked).toEqual({ reason: 'rate-limited', automatic: true })
         })
         test('the secret is never sent to a candidate that does not prove to be the computer', async () => {
@@ -710,6 +723,8 @@ describe('LocalLinkClientService', () => {
             net.endpoints.set(`${ROGUE_ADDRESS}:${ROGUE_PORT}`, rogue)
             announced = [{ type: 'incyclist', name: 'Den PC (AAAA)', address: ROGUE_ADDRESS, port: ROGUE_PORT }]
 
+            // the passive watch would probe the announcement as well: this test is about the browse
+            client.onBackground()
             await run(client.check({ manual: true }))
             await run(client.check({ manual: true }))
 
@@ -749,7 +764,7 @@ describe('LocalLinkClientService', () => {
         test('a lost session is re-established on the saved address without a browse', async () => {
             const linkId = await pairPhone()
             const before = client.getSession(linkId)!
-            mdns.find.mockClear()
+            access.pauseBackgroundActivity.mockClear()
 
             // the desktop closes the connection (e.g. its window reloaded)
             const ids = hostLink.link.send.mock.calls.length
@@ -757,7 +772,7 @@ describe('LocalLinkClientService', () => {
             await hostLink.link.close('c2', 'renderer-gone')
             await until(() => client.getSession(linkId) === undefined || client.getSession(linkId)!.mediaToken !== before.mediaToken)
             await until(() => client.getSession(linkId) !== undefined && client.getSession(linkId)!.mediaToken !== before.mediaToken)
-            expect(mdns.find).not.toHaveBeenCalled()
+            expect(access.pauseBackgroundActivity).not.toHaveBeenCalledWith('local-link')
         })
         test('forwards pushed messages', async () => {
             const linkId = await pairPhone()
@@ -881,112 +896,351 @@ describe('LocalLinkClientService', () => {
         })
     })
 
-    describe('foreground retries of the saved address', () => {
+    describe('on-demand retries and the passive reconnect watch', () => {
         let linkId: string
+        let events: Array<Record<string, unknown>>
         const connects = () => net.connects.length
         const advance = (ms: number) => jest.advanceTimersByTimeAsync(ms)
+        const watchFinds = () => mdns.find.mock.calls.filter(c => c[0]?.type === 'incyclist').length
+        const announce = (a: Announcement = hostAnnouncement()) => { finders.filter(f => f.type === 'incyclist').at(-1)?.cb(a) }
+        const watch = () => (client as unknown as { watch: { isArmed(): boolean, isRunning(): boolean } }).watch
+        const internals = () => client as unknown as {
+            shouldWatch: () => boolean, getBusyReason: () => unknown, getRetryTargets: () => unknown,
+            connectKnown: () => Promise<boolean>, watchStats: { probes: number, suppressed: number },
+        }
+        const reconnected = () => events.filter(e => e.message === 'local-link reconnected')
 
         beforeEach(async () => {
             linkId = await pairPhone()
             await restartPhoneWithoutHost()
+            events = []
+            jest.spyOn(client as unknown as { logEvent: (e: Record<string, unknown>) => void }, 'logEvent').mockImplementation(e => { events.push(e) })
             mdns.find.mockClear()
+            mdns.connect.mockClear()
+            mdns.stopFind?.mockClear()
             access.pauseBackgroundActivity.mockClear()
             net.connects.length = 0
         })
 
-        test('retries after 5 s, 15 s, 30 s and then every 60 s, never browsing', async () => {
-            const expected: Array<[number, number]> = [[4999, 0], [1, 1], [14_999, 1], [1, 2], [29_999, 2], [1, 3], [59_999, 3], [1, 4], [59_999, 4], [1, 5]]
-            for (const [ms, count] of expected) {
-                await advance(ms)
-                expect(connects()).toBe(count)
-            }
-            expect(mdns.find).not.toHaveBeenCalled()
-            expect(access.pauseBackgroundActivity).not.toHaveBeenCalledWith('local-link')
+        describe('timers', () => {
+            test('there is no background retry: nothing is tried while time passes, nothing browses', async () => {
+                await advance(10 * 60_000)
+                expect(connects()).toBe(0)
+                expect(access.pauseBackgroundActivity).not.toHaveBeenCalledWith('local-link')
+            })
+            test('the background retry delays are gone, the short retry after a lost session stays', () => {
+                expect('BACKGROUND_RECONNECT_DELAYS_MS' in consts).toBe(false)
+                expect(consts.RECONNECT_DELAYS_MS).toEqual([1000, 3000, 10_000])
+            })
         })
-        test('stops once the computer is back and a session is open', async () => {
-            await advance(5000)
-            expect(client.getSession(linkId)).toBeUndefined()
-            net.endpoints.set(HOST_ID, hostLink.endpoint)
-            await advance(16_000)
-            expect(client.getSession(linkId)).toBeDefined()
-            expect(props().links[0]).toMatchObject({ reachability: 'reachable', connected: true })
-            const count = connects()
-            await advance(10 * 60_000)
-            expect(connects()).toBe(count)
+
+        describe('on-demand triggers', () => {
+            test('retryNow tries immediately', async () => {
+                client.retryNow()
+                await advance(1)
+                expect(connects()).toBe(1)
+            })
+            test('no attempt while the app is in the background, one right away when it returns', async () => {
+                client.onBackground()
+                client.retryNow()
+                await advance(10 * 60_000)
+                expect(connects()).toBe(0)
+                client.onForeground()
+                await advance(1)
+                expect(connects()).toBe(1)
+            })
+            test('a change of the phone network tries the saved address and re-arms the watch', async () => {
+                client.onNetworkChange()
+                await advance(1)
+                expect(connects()).toBe(1)
+                expect(watch().isRunning()).toBe(true)
+            })
+            test('no attempt during a ride, a device scan or a device pairing, an attempt when idle again', async () => {
+                rideState = 'Active'
+                client.retryNow()
+                access.scanning = true
+                rideState = 'Idle'
+                client.retryNow()
+                access.scanning = false
+                devicePairing.isPairing.mockReturnValue(true)
+                client.retryNow()
+                await advance(1)
+                expect(connects()).toBe(0)
+                devicePairing.isPairing.mockReturnValue(false)
+                client.retryNow()
+                await advance(1)
+                expect(connects()).toBeGreaterThan(0)
+            })
+            test('a forgotten computer is not retried, and the watch ends', async () => {
+                await client.forget(linkId)
+                client.retryNow()
+                await advance(5 * 60_000)
+                expect(connects()).toBe(0)
+                expect(watch().isRunning()).toBe(false)
+            })
+            test('no attempt when the feature is off', async () => {
+                features.BRIDGE_MODE = false
+                client.retryNow()
+                client.onNetworkChange()
+                await advance(5 * 60_000)
+                expect(connects()).toBe(0)
+            })
+            test('attempts never overlap', async () => {
+                let release: () => void = () => undefined
+                const spy = jest.spyOn(internals(), 'connectKnown')
+                    .mockImplementation(() => new Promise<boolean>(resolve => { release = () => resolve(false) }))
+                client.retryNow()
+                await advance(1)
+                expect(spy).toHaveBeenCalledTimes(1)
+                client.retryNow()
+                client.onForeground()
+                client.onNetworkChange()
+                await advance(5 * 60_000)
+                expect(spy).toHaveBeenCalledTimes(1)
+                release()
+                await advance(1)
+                client.retryNow()
+                await advance(1)
+                expect(spy).toHaveBeenCalledTimes(2)
+                release()
+            })
+            test('never throws, also when the checks fail', async () => {
+                jest.spyOn(internals(), 'getBusyReason').mockImplementation(() => { throw new Error('boom') })
+                expect(() => { client.retryNow(); client.onForeground(); client.onBackground(); client.onNetworkChange() }).not.toThrow()
+                jest.spyOn(internals(), 'getRetryTargets').mockImplementation(() => { throw new Error('boom') })
+                expect(() => { client.retryNow(); client.onForeground(); client.onBackground(); client.onNetworkChange() }).not.toThrow()
+                await expect(advance(60_000)).resolves.not.toThrow()
+            })
         })
-        test('no attempt while the app is in the background, one right away when it returns', async () => {
-            client.onBackground()
-            await advance(10 * 60_000)
-            expect(connects()).toBe(0)
-            client.onForeground()
-            await advance(1)
-            expect(connects()).toBe(1)
+
+        describe('when the watch runs', () => {
+            test('foreground, idle, a computer without a session', () => {
+                expect(watch().isRunning()).toBe(true)
+                expect(watch().isArmed()).toBe(true)
+            })
+            test('not in the background; again, and armed again, in the foreground', () => {
+                client.onBackground()
+                expect(watch().isRunning()).toBe(false)
+                expect(mdns.stopFind).toHaveBeenCalledWith('incyclist', 'tcp')
+                expect(mdns.disconnect).not.toHaveBeenCalled()
+                mdns.find.mockClear()
+                client.onForeground()
+                expect(watch().isRunning()).toBe(true)
+                expect(watchFinds()).toBe(1)
+            })
+            test('not during a ride', () => {
+                rideState = 'Active'
+                client.onNetworkChange()
+                expect(watch().isRunning()).toBe(false)
+                expect(mdns.stopFind).toHaveBeenCalledWith('incyclist', 'tcp')
+                announce()
+                expect(connects()).toBe(0)
+                rideState = 'Idle'
+                client.onNetworkChange()
+                expect(watch().isRunning()).toBe(true)
+            })
+            test('not when every computer has a session', async () => {
+                net.endpoints.set(HOST_ID, hostLink.endpoint)
+                client.retryNow()
+                await until(() => client.getSession(linkId) !== undefined)
+                expect(watch().isRunning()).toBe(false)
+                expect(mdns.stopFind).toHaveBeenCalledWith('incyclist', 'tcp')
+            })
+            test('not on a binding without stopFind', () => {
+                client.onBackground()
+                mdns.stopFind = undefined
+                mdns.find.mockClear()
+                client.onForeground()
+                expect(watch().isRunning()).toBe(false)
+                expect(watchFinds()).toBe(0)
+            })
+            test('not when the native app does not carry the feature (iOS: no Bonjour service declared)', () => {
+                client.onBackground()
+                nativeFeatures = []
+                mdns.find.mockClear()
+                client.onForeground()
+                expect(watch().isRunning()).toBe(false)
+                expect(watchFinds()).toBe(0)
+                announce()
+                expect(connects()).toBe(0)
+            })
+            test('not while an Add Computer browse has the discovery, armed again right after it', async () => {
+                const search = client.startSearch()
+                await until(() => access.pauseBackgroundActivity.mock.calls.length > 0)
+                expect(watch().isRunning()).toBe(false)
+                await run(search)
+                expect(watch().isRunning()).toBe(true)
+                expect(watch().isArmed()).toBe(true)
+                const lastFind = mdns.find.mock.invocationCallOrder.at(-1) as number
+                expect(lastFind).toBeGreaterThan(access.resumeBackgroundActivity.mock.invocationCallOrder.at(-1) as number)
+            })
         })
-        test('returning to the foreground starts the backoff over', async () => {
-            await advance(5000 + 15_000 + 30_000)
-            expect(connects()).toBe(3)
-            client.onBackground()
-            client.onForeground()
-            await advance(1)
-            expect(connects()).toBe(4)
-            await advance(4998)
-            expect(connects()).toBe(4)
-            await advance(1)
-            expect(connects()).toBe(5)
+
+        describe('duty cycle and joined rotation', () => {
+            test('without a trainer rotation: 4 s on, every 20 s', async () => {
+                // the watch started in init(): on at 0
+                await advance(3999)
+                expect(mdns.stopFind).not.toHaveBeenCalled()
+                await advance(1)
+                expect(mdns.stopFind).toHaveBeenCalledTimes(1)
+                expect(watch().isArmed()).toBe(false)
+                expect(watch().isRunning()).toBe(true)
+                await advance(15_999)
+                expect(watchFinds()).toBe(0)
+                await advance(1)
+                expect(watchFinds()).toBe(1)
+                expect(watch().isArmed()).toBe(true)
+                await advance(4000)
+                expect(mdns.stopFind).toHaveBeenCalledTimes(2)
+            })
+            test('with a trainer rotation: joins it, never stops its own browser, re-arms every 20 s', async () => {
+                access.wifiConnected = true
+                client.onNetworkChange()
+                expect(watchFinds()).toBe(1)
+                mdns.stopFind?.mockClear()
+                await advance(19_999)
+                expect(mdns.stopFind).not.toHaveBeenCalled()
+                expect(watchFinds()).toBe(1)
+                await advance(1)
+                expect(watchFinds()).toBe(2)
+                expect(mdns.stopFind).not.toHaveBeenCalled()
+                expect(mdns.disconnect).not.toHaveBeenCalled()
+            })
+            test('switches from one to the other when the trainer rotation starts or ends', async () => {
+                await advance(5000)
+                expect(watch().isArmed()).toBe(false)
+                access.wifiConnected = true
+                await advance(20_000)
+                expect(watch().isArmed()).toBe(true)
+                await advance(60_000)
+                expect(watch().isArmed()).toBe(true)
+                access.wifiConnected = false
+                await advance(20_000)
+                await advance(4000)
+                expect(watch().isArmed()).toBe(false)
+            })
+            test('a binding that was reset is re-armed by the next periodic check', async () => {
+                access.wifiConnected = true
+                client.onNetworkChange()
+                mdns.find.mockClear()
+                await advance(20_000)
+                expect(watchFinds()).toBe(1)
+            })
         })
-        test('retryNow tries immediately', async () => {
-            client.retryNow()
-            await advance(1)
-            expect(connects()).toBe(1)
+
+        describe('announcements', () => {
+            test('the computer announces itself: reconnected within the round, no browse, no budget used', async () => {
+                net.endpoints.set(HOST_ID, hostLink.endpoint)
+                announce()
+                await until(() => client.getSession(linkId) !== undefined)
+                expect(props().links[0]).toMatchObject({ reachability: 'reachable', connected: true })
+                expect(access.pauseBackgroundActivity).not.toHaveBeenCalled()
+                expect(props().recovery.autoBrowsesUsed).toBe(0)
+                expect(reconnected()).toEqual([{ message: 'local-link reconnected', source: 'watch', msSinceUnreachable: expect.any(Number) }])
+                expect(events).toContainEqual(expect.objectContaining({ message: 'local-link watch probe', outcome: 'session' }))
+                expect(watch().isRunning()).toBe(false)
+            })
+            test('watch probes do not use up the browse budget', async () => {
+                for (const suffix of ['AAAA', 'BBBB', 'CCCC']) {
+                    announce(hostAnnouncement(suffix))
+                    await advance(100)
+                }
+                expect(connects()).toBe(3)
+                expect(props().recovery.autoBrowsesUsed).toBe(0)
+                await run(client.check())
+                expect(access.pauseBackgroundActivity).toHaveBeenCalledWith('local-link')
+                expect(props().recovery.autoBrowsesUsed).toBe(1)
+            })
+            test('the announcement of every scan round is probed once: in-flight and known announcements are skipped', async () => {
+                announce()
+                announce()
+                await advance(100)
+                announce()
+                await advance(5000)
+                announce()
+                expect(connects()).toBe(1)
+                expect(internals().watchStats.suppressed).toBe(3)
+            })
+            test('an announcement that did not answer is probed again after 30 s; a new suffix is a new announcement', async () => {
+                announce()
+                await advance(100)
+                await advance(30_000)
+                announce()
+                await advance(100)
+                expect(connects()).toBe(2)
+                announce(hostAnnouncement('WXYZ'))
+                await advance(100)
+                expect(connects()).toBe(3)
+            })
+            test('one address is probed at most 3 times in 10 minutes', async () => {
+                for (const suffix of ['AAAA', 'BBBB', 'CCCC', 'DDDD']) {
+                    announce(hostAnnouncement(suffix))
+                    await advance(100)
+                }
+                expect(connects()).toBe(3)
+                await advance(10 * 60_000)
+                announce(hostAnnouncement('EEEE'))
+                await advance(100)
+                expect(connects()).toBe(4)
+            })
+            test('a foreign computer is not probed again, not even later', async () => {
+                const rogue = new RogueEndpoint({ refuseVersion: true })
+                net.endpoints.set(`${ROGUE_ADDRESS}:${ROGUE_PORT}`, rogue)
+                const foreign: Announcement = { type: 'incyclist', name: 'Den PC (AAAA)', address: ROGUE_ADDRESS, port: ROGUE_PORT }
+                announce(foreign)
+                await advance(1000)
+                expect(rogue.connections).toBe(1)
+                announce(foreign)
+                await advance(10 * 60_000)
+                announce(foreign)
+                await advance(1000)
+                expect(rogue.connections).toBe(1)
+                expect(events).toContainEqual(expect.objectContaining({ message: 'local-link watch probe', outcome: 'version' }))
+            })
+            test('an address that already has a session is skipped', async () => {
+                net.endpoints.set(HOST_ID, hostLink.endpoint)
+                announce()
+                await until(() => client.getSession(linkId) !== undefined)
+                net.connects.length = 0
+                jest.spyOn(internals(), 'shouldWatch').mockReturnValue(true)
+                announce(hostAnnouncement('NEWS'))
+                await advance(100)
+                expect(connects()).toBe(0)
+                expect(internals().watchStats.suppressed).toBeGreaterThan(0)
+            })
+            test('announcements of other types or without an address are ignored; nothing throws', async () => {
+                announce({ type: 'wahoo', name: 'x', address: HOST_ADDRESS, port: 6001 })
+                await advance(100)
+                expect(connects()).toBe(0)
+                announce({ type: 'incyclist', name: 'x', address: '', port: 0 })
+                announce(null as unknown as Announcement)
+                await advance(100)
+                expect(connects()).toBe(0)
+            })
         })
-        test('no attempt during a ride, a device scan or a device pairing, continues when idle again', async () => {
-            rideState = 'Active'
-            await advance(3 * 60_000)
-            expect(connects()).toBe(0)
-            rideState = 'Idle'
-            access.scanning = true
-            await advance(3 * 60_000)
-            expect(connects()).toBe(0)
-            access.scanning = false
-            devicePairing.isPairing.mockReturnValue(true)
-            await advance(3 * 60_000)
-            expect(connects()).toBe(0)
-            devicePairing.isPairing.mockReturnValue(false)
-            await advance(60_000)
-            expect(connects()).toBeGreaterThan(0)
-        })
-        test('a forgotten computer is not retried', async () => {
-            await client.forget(linkId)
-            await advance(5 * 60_000)
-            expect(connects()).toBe(0)
-        })
-        test('no attempt when the feature is off', async () => {
-            features.BRIDGE_MODE = false
-            await advance(5 * 60_000)
-            expect(connects()).toBe(0)
-        })
-        test('attempts never overlap', async () => {
-            let release: () => void = () => undefined
-            const spy = jest.spyOn(client as unknown as { connectKnown: () => Promise<boolean> }, 'connectKnown')
-                .mockImplementation(() => new Promise<boolean>(resolve => { release = () => resolve(false) }))
-            await advance(5000)
-            expect(spy).toHaveBeenCalledTimes(1)
-            client.retryNow()
-            client.onForeground()
-            await advance(5 * 60_000)
-            expect(spy).toHaveBeenCalledTimes(1)
-            release()
-            await advance(5000)
-            expect(spy).toHaveBeenCalledTimes(2)
-            release()
-        })
-        test('never throws, also when the checks fail', async () => {
-            const target = client as unknown as { getBusyReason: () => unknown, getRetryTargets: () => unknown }
-            jest.spyOn(target, 'getBusyReason').mockImplementation(() => { throw new Error('boom') })
-            await expect(advance(10_000)).resolves.not.toThrow()
-            jest.spyOn(target, 'getRetryTargets').mockImplementation(() => { throw new Error('boom') })
-            expect(() => { client.retryNow(); client.onForeground(); client.onBackground() }).not.toThrow()
-            await expect(advance(10_000)).resolves.not.toThrow()
+
+        describe('reconnect event', () => {
+            test('on-demand: source and the time since the computer was unreachable', async () => {
+                await advance(7000)
+                net.endpoints.set(HOST_ID, hostLink.endpoint)
+                client.retryNow()
+                await until(() => client.getSession(linkId) !== undefined)
+                expect(reconnected()).toEqual([{ message: 'local-link reconnected', source: 'on-demand', msSinceUnreachable: expect.any(Number) }])
+                expect((reconnected()[0].msSinceUnreachable as number)).toBeGreaterThanOrEqual(7000)
+            })
+            test('after a lost session the short retry reports source reconnect', async () => {
+                net.endpoints.set(HOST_ID, hostLink.endpoint)
+                client.retryNow()
+                await until(() => client.getSession(linkId) !== undefined)
+                events.length = 0
+                const sessions = (client as unknown as { sessions: Map<string, { intentional: boolean, conn: { close: () => void } }> }).sessions
+                const active = sessions.get(linkId)!
+                active.intentional = false
+                active.conn.close()
+                await until(() => reconnected().length > 0)
+                expect(reconnected()).toEqual([{ message: 'local-link reconnected', source: 'reconnect', msSinceUnreachable: expect.any(Number) }])
+                expect(client.getSession(linkId)).toBeDefined()
+            })
         })
     })
 
@@ -1040,10 +1294,15 @@ describe('LocalLinkClientService', () => {
             net.connects.length = 0
             client.reset()
             newClient()
+            access.pauseBackgroundActivity.mockClear()
+            announced = []
             await client.init()
             expect(props().links).toMatchObject([{ linkId, reachability: 'not-reachable' }])
             expect(net.connects).toEqual([])
-            expect(mdns.find).toHaveBeenCalledTimes(1)
+            // the passive watch is armed, nothing else browses
+            expect(mdns.find).toHaveBeenCalledTimes(2)
+            expect(mdns.find).toHaveBeenLastCalledWith({ type: 'incyclist', protocol: 'tcp' }, expect.any(Function))
+            expect(access.pauseBackgroundActivity).not.toHaveBeenCalledWith('local-link')
         })
         test('skips malformed records', async () => {
             mem.files.set('broken', { nonsense: true })

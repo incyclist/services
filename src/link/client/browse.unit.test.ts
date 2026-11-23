@@ -61,4 +61,33 @@ describe('LinkBrowse', () => {
         await expect(new LinkBrowse(wifi).run(10_000)).rejects.toThrow('x')
         expect(wifi.mdns.disconnect).toHaveBeenCalled()
     })
+
+    describe('with a binding that can stop one type', () => {
+        beforeEach(() => {
+            (wifi.mdns as Record<string, unknown>).stopFind = jest.fn()
+        })
+
+        test('stops only its own browser and leaves the binding (and the trainer browsers) alone', async () => {
+            const run = new LinkBrowse(wifi).run(10_000)
+            await jest.advanceTimersByTimeAsync(10_000)
+            await run
+            expect(wifi.mdns.stopFind).toHaveBeenCalledWith('incyclist', 'tcp')
+            expect(wifi.mdns.disconnect).not.toHaveBeenCalled()
+        })
+        test('also when it is cancelled', async () => {
+            const browse = new LinkBrowse(wifi)
+            const run = browse.run(10_000)
+            await jest.advanceTimersByTimeAsync(1)
+            browse.cancel()
+            await run
+            expect(wifi.mdns.stopFind).toHaveBeenCalledTimes(1)
+            expect(wifi.mdns.disconnect).not.toHaveBeenCalled()
+        })
+        test('a failing stopFind does not reject the browse', async () => {
+            (wifi.mdns as unknown as { stopFind: jest.Mock }).stopFind.mockImplementation(() => { throw new Error('x') })
+            const run = new LinkBrowse(wifi).run(1000)
+            await jest.advanceTimersByTimeAsync(1000)
+            await expect(run).resolves.toEqual([])
+        })
+    })
 })

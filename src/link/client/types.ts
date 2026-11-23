@@ -25,8 +25,17 @@ export interface LinkWifiBinding {
         connect(): void
         disconnect(): void
         find(opts: { type?: string, protocol?: 'tcp' | 'udp' } | null, onup?: (service: LinkMdnsAnnouncement) => void): void
+        /**
+         * Stops the browser of one service type and leaves all others running. Optional: a binding
+         * without it can only be released as a whole (`disconnect`), which the passive watch does
+         * not do, so the watch does not run on such a binding.
+         */
+        stopFind?(type: string, protocol?: 'tcp' | 'udp'): void
     }
 }
+
+/** What brought a computer back: the passive watch, an on-demand trigger (page, foreground, check) or the short retry after a lost session. */
+export type LinkReconnectSource = 'watch' | 'on-demand' | 'reconnect'
 
 export type LinkClientPlatform = 'ios' | 'android' | 'other'
 

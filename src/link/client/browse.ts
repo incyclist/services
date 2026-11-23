@@ -21,8 +21,9 @@ export const parseInstanceName = (name: string): { displayName: string, suffix?:
  * One scoped, time-boxed browse for `_incyclist._tcp` through the mobile mDNS binding.
  *
  * The binding keeps one browse running at a time, so the caller must have taken the exclusive
- * use of network discovery before and gives it back after {@link run}. The browser is released
- * (`disconnect`) when the browse ends, whatever the reason.
+ * use of network discovery before and gives it back after {@link run}. The browser of this type
+ * is released when the browse ends, whatever the reason: with `stopFind` where the binding has it
+ * (other browsers stay), otherwise the whole binding is released (`disconnect`).
  */
 export class LinkBrowse {
     protected cancelled = false
@@ -90,7 +91,11 @@ export class LinkBrowse {
 
     protected release(): void {
         try {
-            this.wifi.mdns.disconnect()
+            const mdns = this.wifi.mdns
+            if (typeof mdns.stopFind === 'function')
+                mdns.stopFind(LINK_MDNS_TYPE, 'tcp')
+            else
+                mdns.disconnect()
         }
         catch {
             // best effort: the binding may already be disconnected

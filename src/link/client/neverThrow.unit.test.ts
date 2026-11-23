@@ -135,6 +135,37 @@ describe('LocalLinkClientService never throws', () => {
         expect(logError).toHaveBeenCalledWith(expect.any(Error), 'reset')
     })
 
+    describe('passive watch', () => {
+        test('triggers do not throw when the watch does', () => {
+            internals.watch = { sync: boom, halt: boom, isRunning: boom }
+            internals.canRetry = boom
+            expect(() => { service.onForeground(); service.onBackground(); service.onNetworkChange(); service.retryNow() }).not.toThrow()
+            expect(logError).toHaveBeenCalledWith(expect.any(Error), 'syncWatch')
+            expect(logError).toHaveBeenCalledWith(expect.any(Error), 'retryNow')
+        })
+        test('the announcement handler does not throw', () => {
+            internals.shouldWatch = boom
+            const handle = internals.onWatchAnnouncement as (s: unknown) => void
+            expect(() => handle.call(service, { address: '10.0.0.1', port: 1, name: 'x' })).not.toThrow()
+            expect(() => handle.call(service, null)).not.toThrow()
+            expect(logError).toHaveBeenCalledWith(expect.any(Error), 'onWatchAnnouncement')
+        })
+        test('the probe of an announcement never rejects out of the handler', async () => {
+            internals.shouldWatch = () => true
+            internals.watchProbe = boomAsync
+            ;(internals.onWatchAnnouncement as (s: unknown) => void).call(service, { address: '10.0.0.1', port: 1, name: 'x' })
+            await Promise.resolve()
+            await Promise.resolve()
+            expect(logError).toHaveBeenCalledWith(expect.any(Error), 'watchProbe')
+            expect((internals.watchInFlight as Set<string>).size).toBe(0)
+        })
+        test('the trainer rotation check answers false when the device access fails', () => {
+            internals.getDeviceAccess = boom
+            expect((internals.isTrainerRotationRunning as () => boolean).call(service)).toBe(false)
+            expect(logError).toHaveBeenCalledWith(expect.any(Error), 'isTrainerRotationRunning')
+        })
+    })
+
     describe('callbacks', () => {
         test('a throwing push listener does not break the session handling', () => {
             service.on('push', boom)

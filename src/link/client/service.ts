@@ -13,7 +13,8 @@ import { LinkBrowse, parseInstanceName } from './browse'
 import type { BrowseResult } from './browse'
 import { LinkClientConnection, LinkConnectionError } from './connection'
 import {
-    BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS, BACKGROUND_RECONNECT_DELAYS_MS, RECOVERY_MAX_PER_SESSION,
+    BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS, RECOVERY_MAX_PER_SESSION,
+    WATCH_ADDRESS_WINDOW_MS, WATCH_CACHE_MAX_ENTRIES, WATCH_MAX_PROBES_PER_ADDRESS, WATCH_NEGATIVE_TTL_MS, WATCH_UNREACHABLE_TTL_MS,
 } from './consts'
 import { LinkMediaPath } from './media'
 import { LinkPairingFlow } from './pairing'
@@ -21,9 +22,10 @@ import type { PairTarget } from './pairing'
 import { LinkRecoveryGate } from './recovery'
 import { cleanLocalName, LinkStore } from './store'
 import type {
-    DiscoveredComputer, DiscoveryState, LinkClientLink, LinkClientPlatform, LinkClientSession, LinkMediaAccess,
-    LinkReachability, LinkWifiBinding, LocalLinkClientDisplayProps, LinkPairingFailure, SearchBlockedReason,
+    DiscoveredComputer, DiscoveryState, LinkClientLink, LinkClientPlatform, LinkClientSession, LinkMdnsAnnouncement, LinkMediaAccess,
+    LinkReachability, LinkReconnectSource, LinkWifiBinding, LocalLinkClientDisplayProps, LinkPairingFailure, SearchBlockedReason,
 } from './types'
+import { LinkWatch } from './watch'
 
 const BUSY_RIDE_STATES: CurrentRideState[] = ['Starting', 'Started', 'Active', 'Paused', 'Closing']
 const EXCLUSIVE_OWNER = 'local-link'
@@ -64,6 +66,11 @@ type SearchPhase =
  * - When the saved address fails, one idle-only browse looks for the computer on the network, at
  *   most once per 10 minutes and 3 times per app session. {@link check} with `manual` bypasses the
  *   window and the count but never the idleness rule. When a browse is not allowed the state says so.
+ * - While the app is in the foreground and a paired computer has no session, the phone listens for
+ *   the computer's announcement (passive watch, joins the trainer discovery or is duty-cycled) and
+ *   probes it on an announcement. Watch probes are not browses and do not count against those limits.
+ *   There are no polling timers: the other triggers are the page, the foreground, "check again"
+ *   and a change of the phone's network.
  * - Pairing secrets live in secure storage, records in the `links` repository.
  *
  * Media: {@link getMedia} gives the base URL (direct on iOS, through the loopback pipe on Android),
@@ -97,7 +104,18 @@ export class LocalLinkClientService extends IncyclistService {
     protected searchBlocked?: LocalLinkClientDisplayProps['searchBlocked']
     protected loading?: Promise<void>
     protected foreground = true
-    protected retry: { attempt: number, running: boolean, timer?: ReturnType<typeof setTimeout> } = { attempt: 0, running: false }
+    protected retrying = false
+    protected unreachableSince = new Map<string, number>()
+    protected watchNegative = new Map<string, number>()
+    protected watchProbes = new Map<string, number[]>()
+    protected watchInFlight = new Set<string>()
+    protected watchStats = { probes: 0, suppressed: 0 }
+    protected watch = new LinkWatch({
+        getWifi: () => getBindings()?.wifi as LinkWifiBinding | undefined,
+        canRun: () => this.shouldWatch(),
+        isJoined: () => this.isTrainerRotationRunning(),
+        onAnnouncement: service => this.onWatchAnnouncement(service),
+    })
 
     constructor() {
         super('LocalLinkClient')
@@ -131,8 +149,12 @@ export class LocalLinkClientService extends IncyclistService {
     async init(): Promise<void> {
         try {
             await this.ready()
+            for (const link of this.store.getAll()) {
+                if (!this.sessions.has(link.linkId))
+                    this.markUnreachable(link.linkId)
+            }
             this.emitState()
-            this.startRetry()
+            this.syncWatch()
         }
         catch (err) {
             this.logError(err as Error, 'init')
@@ -278,7 +300,7 @@ export class LocalLinkClientService extends IncyclistService {
                 .finally(() => {
                     this.checkRun = undefined
                     this.emitState()
-                    this.restartRetryBackoff()
+                    this.syncWatch()
                 })
             return this.checkRun
         }
@@ -290,45 +312,55 @@ export class LocalLinkClientService extends IncyclistService {
 
     /**
      * The app returns to the foreground: tries the saved address of every computer without a
-     * session right away and continues with the foreground retries.
+     * session right away and starts the passive watch.
      */
     onForeground(): void {
         try {
             this.foreground = true
             this.retryNow()
+            this.syncWatch()
         }
         catch (err) {
             this.logError(err as Error, 'onForeground')
         }
     }
 
-    /** The app is not in the foreground: no network access for retries until {@link onForeground}. */
+    /** The app is not in the foreground: no network access and no watch until {@link onForeground}. */
     onBackground(): void {
         try {
             this.foreground = false
-            this.stopRetry()
+            this.syncWatch()
         }
         catch (err) {
             this.logError(err as Error, 'onBackground')
         }
     }
 
+    /** The phone's network changed (another WiFi, WiFi back): tries the saved addresses now and re-arms the watch. */
+    onNetworkChange(): void {
+        try {
+            this.retryNow()
+            this.syncWatch()
+        }
+        catch (err) {
+            this.logError(err as Error, 'onNetworkChange')
+        }
+    }
+
     /**
-     * Resets the backoff of the foreground retries and tries the saved address of every computer
-     * without a session now (Routes page and sharing settings call this when they open). Does
-     * nothing while the app is in the background or when nothing is paired.
+     * Tries the saved address of every computer without a session now (Routes page and sharing
+     * settings call this when they open). Does nothing while the app is in the background, busy,
+     * when nothing is paired or while an attempt is running.
      */
     retryNow(): void {
         try {
-            if (!this.canRetry())
+            if (this.retrying || !this.canRetry() || this.isNetworkBusy())
                 return
-            clearTimeout(this.retry.timer)
-            this.retry.timer = undefined
-            this.retry.attempt = -1
-            if (!this.retry.running)
-                this.retry.timer = setTimeout(() => this.onRetryTimer(), 0)
+            this.retrying = true
+            this.runRetry().catch(err => this.logError(err as Error, 'retryNow'))
         }
         catch (err) {
+            this.retrying = false
             this.logError(err as Error, 'retryNow')
         }
     }
@@ -366,7 +398,8 @@ export class LocalLinkClientService extends IncyclistService {
             await this.media.release(linkId)
             await this.store.remove(linkId)
             this.mismatched.delete(linkId)
-            this.stopRetryIfDone()
+            this.unreachableSince.delete(linkId)
+            this.syncWatch()
             for (const computer of this.discovered.values()) {
                 if (computer.linkId === linkId)
                     delete computer.linkId
@@ -384,14 +417,14 @@ export class LocalLinkClientService extends IncyclistService {
      * An authenticated session with a computer: the open one, or a new one on its saved address.
      * Never browses the network. `undefined` if the computer does not answer.
      */
-    async ensureSession(linkId: string): Promise<LinkClientSession | undefined> {
+    async ensureSession(linkId: string, source: LinkReconnectSource = 'on-demand'): Promise<LinkClientSession | undefined> {
         try {
             await this.ready()
             const link = this.store.get(linkId)
             if (!link || !this.isSupported())
                 return undefined
             if (!this.sessions.has(linkId))
-                await this.connectKnown(link)
+                await this.connectKnown(link, source)
             return this.getSession(linkId)
         }
         catch (err) {
@@ -499,7 +532,12 @@ export class LocalLinkClientService extends IncyclistService {
         try {
             this.browse?.cancel()
             this.pairingFlow.cancel()
-            this.stopRetry()
+            this.watch.halt()
+            this.watchNegative.clear()
+            this.watchProbes.clear()
+            this.watchInFlight.clear()
+            this.unreachableSince.clear()
+            this.flushWatchStats()
             for (const linkId of [...this.reconnects.keys()])
                 this.cancelReconnect(linkId)
             for (const linkId of [...this.sessions.keys()])
@@ -688,6 +726,8 @@ export class LocalLinkClientService extends IncyclistService {
         const browse = new LinkBrowse(getBindings().wifi as LinkWifiBinding)
         this.browse = browse
         this.gate.recordBrowse(automatic, Date.now())
+        // exclusive use of the discovery: the watch steps aside (the browse is itself an announcement listener)
+        this.syncWatch()
         onStart?.()
 
         const access = this.getDeviceAccess()
@@ -713,6 +753,8 @@ export class LocalLinkClientService extends IncyclistService {
             access.off('scanstate-changed', onScan)
             this.browse = undefined
             await access.resumeBackgroundActivity(EXCLUSIVE_OWNER).catch(() => undefined)
+            // the pause released every browser of the binding, the watch's too
+            this.syncWatch()
         }
     }
 
@@ -781,30 +823,32 @@ export class LocalLinkClientService extends IncyclistService {
      *
      * @returns false if recovery (a browse) could help: the address did not answer or did not prove to be that computer
      */
-    protected connectKnown(link: LinkRecord): Promise<boolean> {
+    protected connectKnown(link: LinkRecord, source: LinkReconnectSource = 'on-demand'): Promise<boolean> {
         let attempt = this.connecting.get(link.linkId)
         if (!attempt) {
-            attempt = this.connectAt(link).finally(() => this.connecting.delete(link.linkId))
+            attempt = this.connectAt(link, source).finally(() => this.connecting.delete(link.linkId))
             this.connecting.set(link.linkId, attempt)
         }
         return attempt
     }
 
-    protected async connectAt(link: LinkRecord): Promise<boolean> {
+    protected async connectAt(link: LinkRecord, source: LinkReconnectSource): Promise<boolean> {
         const address = link.lastAddress
         const candidates = await this.loadCandidates([link])
         if (!address || candidates.length === 0)
             return false
         const result = await this.probe(address.host, address.controlPort, candidates)
         if (result.kind === 'session') {
-            this.adoptSession(result)
+            this.adoptSession(result, source)
             return true
         }
         if (result.kind === 'version') {
             this.mismatched.add(link.linkId)
             this.emitState()
+            this.syncWatch()
             return true
         }
+        this.markUnreachable(link.linkId)
         return false
     }
 
@@ -852,7 +896,7 @@ export class LocalLinkClientService extends IncyclistService {
         }
     }
 
-    protected adoptSession(result: Extract<ProbeResult, { kind: 'session' }>): void {
+    protected adoptSession(result: Extract<ProbeResult, { kind: 'session' }>, source: LinkReconnectSource = 'on-demand'): void {
         const { link, conn, session, host, port } = result
         this.closeSession(link.linkId)
         this.cancelReconnect(link.linkId)
@@ -865,7 +909,6 @@ export class LocalLinkClientService extends IncyclistService {
         }
         const active: ActiveSession = { conn, info, intentional: false }
         this.sessions.set(link.linkId, active)
-        this.stopRetryIfDone()
         conn.on('message', msg => this.onPush(link.linkId, msg))
         conn.on('close', () => this.onSessionClosed(link.linkId, active))
         conn.listen()
@@ -875,6 +918,8 @@ export class LocalLinkClientService extends IncyclistService {
             lastAddress: { host, controlPort: port }, lastSeenAt: Date.now(), protocolVersion: result.version,
         }).catch(err => this.logError(err, 'adoptSession'))
         this.logEvent({ message: 'local-link session established' })
+        this.logReconnect(link.linkId, source)
+        this.syncWatch()
         try {
             this.emit('session-changed', { linkId: link.linkId, session: this.getSession(link.linkId) })
         }
@@ -909,8 +954,9 @@ export class LocalLinkClientService extends IncyclistService {
             this.emit('session-changed', { linkId, session: undefined })
             this.emitState()
             if (!active.intentional) {
+                this.markUnreachable(linkId)
                 this.scheduleReconnect(linkId)
-                this.startRetry()
+                this.syncWatch()
             }
         }
         catch (err) {
@@ -938,7 +984,7 @@ export class LocalLinkClientService extends IncyclistService {
 
     protected onReconnectTimer(linkId: string): void {
         try {
-            this.ensureSession(linkId)
+            this.ensureSession(linkId, 'reconnect')
                 .then(session => { if (!session) this.scheduleReconnect(linkId) })
                 .catch(err => this.logError(err, 'reconnect'))
         }
@@ -952,7 +998,7 @@ export class LocalLinkClientService extends IncyclistService {
         this.reconnects.delete(linkId)
     }
 
-    // --- foreground retries of the saved address ---
+    // --- retry of the saved address (on demand) ---
 
     /** Computers that have a record, no session and are not known to speak another protocol version. */
     protected getRetryTargets(): LinkRecord[] {
@@ -963,84 +1009,9 @@ export class LocalLinkClientService extends IncyclistService {
         return this.foreground && this.isSupported() && this.getRetryTargets().length > 0
     }
 
-    /** Schedules the first retry (backoff from the start) unless one is already scheduled or running. */
-    protected startRetry(): void {
-        try {
-            if (this.retry.timer || this.retry.running || !this.canRetry())
-                return
-            this.retry.attempt = 0
-            this.scheduleRetry()
-        }
-        catch (err) {
-            this.logError(err as Error, 'startRetry')
-        }
-    }
-
-    /** A check (open of the settings, "check again") has just tried everything: the backoff starts over. */
-    protected restartRetryBackoff(): void {
-        try {
-            this.retry.attempt = 0
-            if (!this.retry.running)
-                this.scheduleRetry()
-        }
-        catch (err) {
-            this.logError(err as Error, 'restartRetryBackoff')
-        }
-    }
-
-    protected scheduleRetry(): void {
-        try {
-            clearTimeout(this.retry.timer)
-            this.retry.timer = undefined
-            if (!this.canRetry())
-                return
-            const delays = BACKGROUND_RECONNECT_DELAYS_MS
-            const delay = delays[Math.min(Math.max(this.retry.attempt, 0), delays.length - 1)]
-            this.retry.timer = setTimeout(() => this.onRetryTimer(), delay)
-        }
-        catch (err) {
-            this.logError(err as Error, 'scheduleRetry')
-        }
-    }
-
-    protected stopRetry(): void {
-        clearTimeout(this.retry.timer)
-        this.retry.timer = undefined
-    }
-
-    protected stopRetryIfDone(): void {
-        try {
-            if (!this.canRetry())
-                this.stopRetry()
-        }
-        catch (err) {
-            this.logError(err as Error, 'stopRetryIfDone')
-        }
-    }
-
     /** true while a ride, a device scan, a device pairing, a search or a computer pairing is running */
     protected isNetworkBusy(): boolean {
         return this.getBusyReason() !== undefined || this.pairingFlow.getState().step !== 'idle'
-    }
-
-    protected onRetryTimer(): void {
-        try {
-            this.retry.timer = undefined
-            if (this.retry.running || !this.canRetry())
-                return
-            if (this.isNetworkBusy()) {
-                // not now: the attempt is skipped, the backoff continues
-                this.retry.attempt++
-                this.scheduleRetry()
-                return
-            }
-            this.retry.running = true
-            this.runRetry().catch(err => this.logError(err as Error, 'onRetryTimer'))
-        }
-        catch (err) {
-            this.retry.running = false
-            this.logError(err as Error, 'onRetryTimer')
-        }
     }
 
     /** One attempt on the saved addresses; never browses. Never rejects. */
@@ -1054,9 +1025,172 @@ export class LocalLinkClientService extends IncyclistService {
             this.logError(err as Error, 'runRetry')
         }
         finally {
-            this.retry.running = false
-            this.retry.attempt++
-            this.scheduleRetry()
+            this.retrying = false
+        }
+    }
+
+    // --- passive reconnect watch ---
+
+    /** Starts, re-arms or stops the watch, depending on what holds now. Call whenever a condition may have changed. */
+    protected syncWatch(): void {
+        try {
+            this.watch.sync()
+            if (!this.watch.isRunning())
+                this.flushWatchStats()
+        }
+        catch (err) {
+            this.logError(err as Error, 'syncWatch')
+        }
+    }
+
+    /**
+     * The watch runs while the app is in the foreground, nothing exclusive uses the discovery (a
+     * ride, an Add Computer browse) and a paired computer has no session. `isSupported` includes
+     * the native requirements (iOS: the app declares the Bonjour service), so an app without them
+     * never listens.
+     */
+    protected shouldWatch(): boolean {
+        try {
+            return this.foreground && this.isSupported() && !this.browse
+                && !BUSY_RIDE_STATES.includes(this.getRideDisplay().getState())
+                && this.getRetryTargets().length > 0
+        }
+        catch (err) {
+            this.logError(err as Error, 'shouldWatch')
+            return false
+        }
+    }
+
+    /** true if the trainer discovery (WiFi interface) runs a rotation the watch can join */
+    protected isTrainerRotationRunning(): boolean {
+        try {
+            return this.getDeviceAccess().getInterface?.('wifi')?.isConnected?.() === true
+        }
+        catch (err) {
+            this.logError(err as Error, 'isTrainerRotationRunning')
+            return false
+        }
+    }
+
+    /**
+     * An announcement of a computer. Announcements carry no link id: the probe (challenge-response)
+     * finds out whether it is one of the paired computers. Every scan round announces again, so
+     * addresses with a session, announcements already probed and addresses probed too often are skipped.
+     */
+    protected onWatchAnnouncement(service: LinkMdnsAnnouncement): void {
+        try {
+            if (!this.shouldWatch())
+                return
+            const { address, port } = service
+            const now = Date.now()
+            const key = `${address}:${port}:${service.name ?? ''}`
+            const hasSession = [...this.sessions.values()].some(s => s.info.host === address)
+            // a connection attempt or a pairing is talking to computers right now: the next scan round announces again
+            const busy = this.connecting.size > 0 || this.pairingFlow.getState().step !== 'idle'
+            if (hasSession || busy || this.watchInFlight.has(key) || this.isWatchNegative(key, now) || !this.canProbeAddress(address, now)) {
+                this.watchStats.suppressed++
+                return
+            }
+            this.watchInFlight.add(key)
+            this.recordWatchProbe(address, now)
+            this.watchProbe(service, key)
+                .catch(err => this.logError(err as Error, 'watchProbe'))
+                .finally(() => this.watchInFlight.delete(key))
+        }
+        catch (err) {
+            this.logError(err as Error, 'onWatchAnnouncement')
+        }
+    }
+
+    protected async watchProbe(service: LinkMdnsAnnouncement, key: string): Promise<void> {
+        const candidates = await this.loadCandidates(this.getRetryTargets())
+        if (candidates.length === 0)
+            return
+        const result = await this.probe(service.address, service.port, candidates)
+        this.watchStats.probes++
+        if (result.kind === 'session') {
+            this.watchNegative.delete(key)
+            if (this.sessions.has(result.link.linkId))
+                result.conn.close()
+            else
+                this.adoptSession(result, 'watch')
+        }
+        else {
+            this.addWatchNegative(key, result.kind === 'unreachable' ? WATCH_UNREACHABLE_TTL_MS : WATCH_NEGATIVE_TTL_MS)
+        }
+        this.logEvent({ message: 'local-link watch probe', outcome: result.kind, probes: this.watchStats.probes, suppressed: this.watchStats.suppressed })
+    }
+
+    protected isWatchNegative(key: string, now: number): boolean {
+        const until = this.watchNegative.get(key)
+        if (until === undefined)
+            return false
+        if (until <= now) {
+            this.watchNegative.delete(key)
+            return false
+        }
+        return true
+    }
+
+    protected addWatchNegative(key: string, ttl: number): void {
+        this.watchNegative.set(key, Date.now() + ttl)
+        // bounded: the oldest entries go first
+        while (this.watchNegative.size > WATCH_CACHE_MAX_ENTRIES) {
+            const oldest = this.watchNegative.keys().next().value
+            if (oldest === undefined)
+                break
+            this.watchNegative.delete(oldest)
+        }
+    }
+
+    protected canProbeAddress(address: string, now: number): boolean {
+        const recent = (this.watchProbes.get(address) ?? []).filter(t => t > now - WATCH_ADDRESS_WINDOW_MS)
+        return recent.length < WATCH_MAX_PROBES_PER_ADDRESS
+    }
+
+    protected recordWatchProbe(address: string, now: number): void {
+        const recent = (this.watchProbes.get(address) ?? []).filter(t => t > now - WATCH_ADDRESS_WINDOW_MS)
+        recent.push(now)
+        this.watchProbes.delete(address)
+        this.watchProbes.set(address, recent)
+        while (this.watchProbes.size > WATCH_CACHE_MAX_ENTRIES) {
+            const oldest = this.watchProbes.keys().next().value
+            if (oldest === undefined)
+                break
+            this.watchProbes.delete(oldest)
+        }
+    }
+
+    /** Logs and resets the counter of probes and suppressed duplicates when the watch ends. */
+    protected flushWatchStats(): void {
+        try {
+            const { probes, suppressed } = this.watchStats
+            if (probes === 0 && suppressed === 0)
+                return
+            this.watchStats = { probes: 0, suppressed: 0 }
+            this.logEvent({ message: 'local-link watch ended', probes, suppressed })
+        }
+        catch (err) {
+            this.logError(err as Error, 'flushWatchStats')
+        }
+    }
+
+    protected markUnreachable(linkId: string): void {
+        if (!this.unreachableSince.has(linkId))
+            this.unreachableSince.set(linkId, Date.now())
+    }
+
+    /** A computer that was unreachable has a session again. */
+    protected logReconnect(linkId: string, source: LinkReconnectSource): void {
+        try {
+            const since = this.unreachableSince.get(linkId)
+            if (since === undefined)
+                return
+            this.unreachableSince.delete(linkId)
+            this.logEvent({ message: 'local-link reconnected', source, msSinceUnreachable: Math.max(0, Date.now() - since) })
+        }
+        catch (err) {
+            this.logError(err as Error, 'logReconnect')
         }
     }
 
@@ -1099,8 +1233,9 @@ export class LocalLinkClientService extends IncyclistService {
         this.logEvent({ message: 'local-link computer paired' })
         this.emitState()
         // the pairing connection is unsigned: the session needs its own authenticated connection
-        this.ensureSession(record.linkId).catch(err => this.logError(err, 'savePaired'))
-        this.startRetry()
+        this.ensureSession(record.linkId)
+            .catch(err => this.logError(err, 'savePaired'))
+            .finally(() => this.syncWatch())
         return undefined
     }
 
