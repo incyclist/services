@@ -1125,6 +1125,42 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     /**
+     * Sets the `linkSources` marker of routes (the paired computers that offer the route's video).
+     * Only that field of the description changes: the details of a route are not loaded or written,
+     * a route whose marker is unchanged is not touched, and the descriptions are persisted with one
+     * write. No card is updated: the caller refreshes the availability of the routes it knows changed.
+     * A failure is logged, never thrown.
+     *
+     * @returns the number of routes that were changed
+     */
+    public updateLinkSources(updates:Array<{id:string, linkSources:string[]}>):number {
+        try {
+            const changed:Array<Route> = []
+            const byId = new Map(this.routes.map( r=>[r.description?.id,r] as const))
+            for (const {id,linkSources} of updates) {
+                const route = byId.get(id)
+                if (!route)
+                    continue
+                const current = route.description.linkSources ?? []
+                if (current.length===linkSources.length && current.every( (l,i)=>l===linkSources[i]))
+                    continue
+                if (linkSources.length>0)
+                    route.description.linkSources = [...linkSources]
+                else
+                    delete route.description.linkSources
+                changed.push(route)
+            }
+            if (changed.length>0)
+                this.db.saveDescriptions(changed)
+            return changed.length
+        }
+        catch(err:any) {
+            this.logError(err,'updateLinkSources')
+            return 0
+        }
+    }
+
+    /**
      * Removes a route that was created from a computer's catalog: its description, details and card.
      * No user setting or file of the user is touched.
      *

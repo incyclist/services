@@ -2082,6 +2082,49 @@ describe('RouteListService',()=>{
             expect((service as any).db.save).toHaveBeenCalledWith(route, true)
         })
 
+        describe('updateLinkSources',()=>{
+            const own = () => new Route({ id:'o1', routeHash:'h1', title:'Own', isLocal:false, hasVideo:true, requiresDownload:true, distance:5000, country:'DE' })
+
+            beforeEach(()=>{
+                ;(service as any).db.saveDescriptions = jest.fn()
+            })
+
+            test('changes only the marker, in memory and in one description write, without touching details',()=>{
+                const route = own()
+                const before = JSON.parse(JSON.stringify(route.description))
+                service.addRoute(route)
+
+                const changed = service.updateLinkSources([{ id:'o1', linkSources:['A','B'] }])
+
+                expect(changed).toBe(1)
+                expect(service.getRoute('o1')?.description).toEqual({ ...before, linkSources:['A','B'] })
+                expect((service as any).db.saveDescriptions).toHaveBeenCalledTimes(1)
+                expect((service as any).db.saveDescriptions).toHaveBeenCalledWith([route])
+                expect((service as any).db.save).not.toHaveBeenCalled()
+                expect((service as any).db.getDetails).not.toHaveBeenCalled()
+                expect((service as any).api.loadDetails).not.toHaveBeenCalled()
+            })
+
+            test('a route whose marker did not change is not saved',()=>{
+                service.addRoute(new Route({ ...own().description, linkSources:['A'] }))
+                expect(service.updateLinkSources([{ id:'o1', linkSources:['A'] }])).toBe(0)
+                expect((service as any).db.saveDescriptions).not.toHaveBeenCalled()
+            })
+
+            test('an empty marker removes the field',()=>{
+                service.addRoute(new Route({ ...own().description, linkSources:['A'] }))
+                expect(service.updateLinkSources([{ id:'o1', linkSources:[] }])).toBe(1)
+                expect(service.getRoute('o1')?.description).not.toHaveProperty('linkSources')
+            })
+
+            test('an unknown route is ignored and a failure is not thrown',()=>{
+                expect(service.updateLinkSources([{ id:'nope', linkSources:['A'] }])).toBe(0)
+                service.addRoute(own())
+                ;(service as any).db.saveDescriptions = jest.fn(()=>{ throw new Error('boom') })
+                expect(service.updateLinkSources([{ id:'o1', linkSources:['A'] }])).toBe(0)
+            })
+        })
+
         test('removeSharedRoute removes route, card and persisted record',async ()=>{
             const route = shared()
             service.addRoute(route)

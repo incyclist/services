@@ -821,8 +821,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             try {
                 if (!all && !route.linkShared)
                     continue
-                const props = this.getRouteAvailabilityProps(route, resolver, links)
                 const card = this.getCardOf(route.id)
+                // the markers of the description may have changed since the route was put in the page state
+                const current = card?.getRouteDescription?.()
+                const props = this.getRouteAvailabilityProps(current ? {...route, ...current, linkSources: current.linkSources} as RouteItemProps : route, resolver, links)
                 if (card?.setAvailabilityProps?.(props))
                     card.emitUpdate()
             }
@@ -849,6 +851,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getLocalLinkClient().on('session-changed', this.linkStateHandler)
         this.getLocalLinkClient().on('state-changed', this.linkStateHandler)
         this.getSharingClient().on('synced', this.linkStateHandler)
+        this.getSharingClient().on('link-sources-changed', this.linkStateHandler)
 
         const {observer} = this.serviceState??{}
         if (!observer)
@@ -874,6 +877,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getLocalLinkClient().off('session-changed', this.linkStateHandler)
         this.getLocalLinkClient().off('state-changed', this.linkStateHandler)
         this.getSharingClient().off('synced', this.linkStateHandler)
+        this.getSharingClient().off('link-sources-changed', this.linkStateHandler)
 
         if (!observer)
             return

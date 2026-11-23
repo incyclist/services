@@ -578,20 +578,17 @@ describe('RouteCard preview handling', () => {
         });
     });
 
-    describe('availability props set before the details were loaded', () => {
-        test('are recomputed once the details are there', () => {
+    describe('availability props of the list', () => {
+        test('are carried as they are: loading the details does not change them', () => {
             const card = createCard({ id: '1', title: 'Alpe du Zwift', hasVideo: true } as RouteInfo) as any;
-            card.getVideoResolver = () => ({
-                getRouteAvailability: jest.fn((_r: unknown, opts: { hasDetails?: boolean }) => opts.hasDetails
-                    ? { canStart: false, availability: 'unavailable', unavailableReason: 'noSource' }
-                    : { canStart: true, availability: 'remote' }),
-            });
+            const getRouteAvailability = jest.fn();
+            card.getVideoResolver = () => ({ getRouteAvailability });
             card.setAvailabilityProps({ availability: 'remote' });
             expect(card.getDisplayProperties()).toMatchObject({ availability: 'remote' });
 
             card.route.details = { video: { url: 'x' }, points: [{}] };
-            const props = card.getDisplayProperties();
-            expect(props).toMatchObject({ availability: 'unavailable', unavailableReason: 'noSource' });
+            expect(card.getDisplayProperties()).toMatchObject({ availability: 'remote' });
+            expect(getRouteAvailability).not.toHaveBeenCalled();
         });
     });
 

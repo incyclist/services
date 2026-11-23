@@ -483,6 +483,170 @@ describe('RouteSharingClientService', () => {
         })
     })
 
+    describe('link source markers', () => {
+        const hash = 'b'.repeat(32)
+        type Descr = Record<string, unknown>
+        let routes: Array<{ description: Descr }>
+        let loaded: boolean
+        let updateLinkSources: jest.Mock
+        const catalog = (version: string, entries: Array<Record<string, unknown>>) => ({
+            catalogVersion: version,
+            routes: entries.map(e => ({ routeIdOnComputer: 'id', title: 'T', videoHandle: 'h', videoFormat: 'mp4', size: 1, mtime: 1, ...e })),
+        })
+        const official = { routeKey: 'off1', origin: 'official' }
+        const byHash = { routeKey: hash, origin: 'local', routeHash: hash, summary: { title: 'Mine' } }
+        const description = (id: string) => routes.find(r => r.description.id === id)!.description
+
+        beforeEach(() => {
+            loaded = true
+            routes = [
+                { description: { id: 'off1', title: 'Official', hasVideo: true, requiresDownload: true, distance: 1000, version: 3 } },
+                { description: { id: 'mine', routeHash: hash, title: 'Mine', isLocal: true, hasVideo: true, distance: 2000 } },
+                { description: { id: 'other', title: 'Other', hasVideo: true } },
+            ]
+            updateLinkSources = jest.fn((updates: Array<{ id: string, linkSources: string[] }>) => {
+                for (const u of updates) {
+                    const d = description(u.id)
+                    if (u.linkSources.length > 0)
+                        d.linkSources = u.linkSources
+                    else
+                        delete d.linkSources
+                }
+                return updates.length
+            })
+            Object.assign(list, {
+                getAllRoutes: () => loaded ? routes : undefined,
+                isStillLoading: () => !loaded,
+                getRoute: (id: string) => routes.find(r => r.description.id === id),
+                getSelected: () => undefined,
+                addRoutes: jest.fn(),
+                saveRoute: jest.fn(async () => undefined),
+                removeSharedRoute: jest.fn(async () => true),
+                updateLinkSources,
+            })
+        })
+
+        test('a fresh install: no computer, no marker, no write', async () => {
+            await service.start()
+            list.emit('load-done')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(updateLinkSources).not.toHaveBeenCalled()
+            expect(routes.every(r => !('linkSources' in r.description))).toBe(true)
+        })
+
+        test('a sync marks the matching routes by id and by routeHash, officials are not materialised, nothing else changes', async () => {
+            const before = JSON.parse(JSON.stringify(routes))
+            const changed = jest.fn()
+            service.on('link-sources-changed', changed)
+            addLink('A')
+            responses.set('http://A:1', catalog('v1', [official, byHash, { routeKey: 'unknown', origin: 'official' }]))
+            await service.syncAll()
+
+            expect(description('off1')).toEqual({ ...before[0].description, linkSources: ['A'] })
+            expect(description('mine')).toEqual({ ...before[1].description, linkSources: ['A'] })
+            expect(description('other')).toEqual(before[2].description)
+            expect(routes).toHaveLength(3)
+            expect((list as unknown as { addRoutes: jest.Mock }).addRoutes).not.toHaveBeenCalled()
+            expect(updateLinkSources).toHaveBeenCalledTimes(1)
+            expect(updateLinkSources.mock.calls[0][0]).toHaveLength(2)
+            expect(changed).toHaveBeenCalledWith(2)
+        })
+
+        test('a second sync that changes nothing writes nothing', async () => {
+            addLink('A')
+            responses.set('http://A:1', catalog('v1', [official]))
+            await service.syncAll()
+            updateLinkSources.mockClear()
+            responses.set('http://A:1', catalog('v2', [official]))
+            client.media.set('A', access('A', 'v2'))
+            await service.syncAll()
+            expect(updateLinkSources).not.toHaveBeenCalled()
+        })
+
+        test('several computers are all listed; a computer that drops the route is removed from the marker', async () => {
+            addLink('A')
+            addLink('B')
+            responses.set('http://A:1', catalog('a1', [official]))
+            responses.set('http://B:1', catalog('b1', [official]))
+            await service.syncAll()
+            expect(description('off1').linkSources).toEqual(['A', 'B'])
+
+            responses.set('http://B:1', catalog('b2', []))
+            client.media.set('B', access('B', 'b2'))
+            await service.syncAll()
+            expect(description('off1').linkSources).toEqual(['A'])
+        })
+
+        test('the route is dropped from the marker as soon as the computer answers without it', async () => {
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await service.syncAll()
+            responses.set('http://A:1', catalog('a2', []))
+            client.media.set('A', access('A', 'a2'))
+            await service.syncAll()
+            expect(description('off1')).not.toHaveProperty('linkSources')
+        })
+
+        test('a computer that does not answer keeps its markers', async () => {
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await service.syncAll()
+            client.media.delete('A')
+            await service.syncAll({ force: true })
+            expect(description('off1').linkSources).toEqual(['A'])
+        })
+
+        test('forgetting a computer clears its markers and keeps the others', async () => {
+            addLink('A')
+            addLink('B')
+            responses.set('http://A:1', catalog('a1', [official, byHash]))
+            responses.set('http://B:1', catalog('b1', [official]))
+            await service.start()
+            await service.syncAll()
+
+            client.emit('link-forgotten', 'A')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(description('off1').linkSources).toEqual(['B'])
+            expect(description('mine')).not.toHaveProperty('linkSources')
+            expect(routes).toHaveLength(3)
+
+            client.emit('link-forgotten', 'B')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(description('off1')).not.toHaveProperty('linkSources')
+        })
+
+        test('a route list that finished loading after the sync gets the markers on load-done', async () => {
+            loaded = false
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await service.start()
+            await service.syncAll()
+            expect(updateLinkSources).not.toHaveBeenCalled()
+            expect(description('off1')).not.toHaveProperty('linkSources')
+
+            loaded = true
+            list.emit('load-done')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(description('off1').linkSources).toEqual(['A'])
+        })
+
+        test('a route that exists only because of the computer carries no marker (its rows are the source)', async () => {
+            routes.push({ description: { id: hash.replace('b', 'c'), linkShared: true, title: 'Shared', isLocal: true, hasVideo: true } })
+            const key = hash.replace('b', 'c')
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [{ routeKey: key, origin: 'local', routeHash: key, summary: { title: 'Shared' } }]))
+            await service.syncAll()
+            expect(description(key)).not.toHaveProperty('linkSources')
+        })
+
+        test('a failing route list never throws out of a sync', async () => {
+            updateLinkSources.mockImplementation(() => { throw new Error('boom') })
+            addLink('A')
+            responses.set('http://A:1', catalog('a1', [official]))
+            await expect(service.syncAll()).resolves.toEqual([expect.objectContaining({ status: 'synced' })])
+        })
+    })
+
     describe('onStaleHandle', () => {
         test('resyncs once and returns the new handle', async () => {
             addLink('A')

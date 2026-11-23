@@ -14,6 +14,7 @@ import {
     HANDLE_PATTERN, ROUTE_HASH_PATTERN, SYNC_TIMEOUT_MS, UNREACHABLE_TTL_MS,
 } from './consts'
 import { DescriptorLoadError, getDescriptorDocument, parseDescriptor } from './descriptor'
+import { RouteLinkMarker } from './markers'
 import { SharedRouteRepo } from './repo'
 import { SharedRouteMaterializer } from './routes'
 import type { DescriptorFailure, DescriptorTrigger, LinkSyncState, SyncFailureReason, SyncOptions, SyncResult } from './types'
@@ -134,6 +135,13 @@ export class RouteSharingClientService extends IncyclistService {
     protected materializer = new SharedRouteMaterializer({
         getList: () => this.getRouteList(),
         getRowsForRoute: routeKey => this.getRowsForRoute(routeKey),
+        log: event => this.logEvent(event),
+        logError: (err, fn) => this.logError(err, fn),
+    })
+
+    protected marker = new RouteLinkMarker({
+        getList: () => this.getRouteList(),
+        getRows: () => this.repo.getAll(),
         log: event => this.logEvent(event),
         logError: (err, fn) => this.logError(err, fn),
     })
@@ -361,6 +369,8 @@ export class RouteSharingClientService extends IncyclistService {
         const onLoaded = () => {
             try {
                 this.materializeCached().catch(err => this.logError(err, 'materialize'))
+                // the sync may have been done before the list was there: the markers come from the saved rows
+                this.repo.load().then(() => this.reconcileMarkers()).catch(err => this.logError(err, 'markers'))
                 this.syncAll().catch(err => this.logError(err, 'preload'))
             }
             catch (err) {
@@ -395,10 +405,26 @@ export class RouteSharingClientService extends IncyclistService {
                 this.emitSyncState({ linkId, state: 'idle' })
             this.repo.forgetLink(linkId)
                 .then(() => this.materializer.removeOrphans())
+                .then(() => this.reconcileMarkers())
                 .catch(err => this.logError(err, 'forget'))
         }
         catch (err) {
             this.logError(err as Error, 'onLinkForgotten')
+        }
+    }
+
+    /**
+     * Writes the `linkSources` marker of the routes from the saved rows (marker only, see {@link RouteLinkMarker}).
+     * Emits `link-sources-changed` if a route changed. Never throws.
+     */
+    protected reconcileMarkers(): void {
+        try {
+            const changed = this.marker.reconcile()
+            if (changed)
+                this.emit('link-sources-changed', changed)
+        }
+        catch (err) {
+            this.logError(err as Error, 'reconcileMarkers')
         }
     }
 
@@ -554,6 +580,7 @@ export class RouteSharingClientService extends IncyclistService {
         this.logEvent({ message: 'route sharing catalog synced', routes: doc.routes.length, added, removed })
         this.catalogs.set(linkId, doc.routes)
         await this.materialize(doc.routes)
+        this.reconcileMarkers()
         return { linkId, status: 'synced', added, removed, routeCount: doc.routes.length }
     }
 

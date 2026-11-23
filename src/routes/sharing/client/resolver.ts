@@ -60,12 +60,12 @@ export class RouteVideoResolver extends IncyclistService {
 
     /**
      * true if the video can come from a computer: the route has a remote original (it can not be
-     * bricked by a missing computer) or it was created from a computer's catalog (it can only come
-     * from a computer)
+     * bricked by a missing computer: its description says so, or it has a remote url) or it was created
+     * from a computer's catalog (it can only come from a computer)
      */
     isEligible(route: VideoSourceInput): boolean {
         try {
-            return !!route?.linkShared || (!route?.isLocal && this.getRemoteUrl(route) !== undefined)
+            return !!route?.linkShared || (!route?.isLocal && (!!route?.requiresDownload || this.getRemoteUrl(route) !== undefined))
         }
         catch (err) {
             this.logError(err as Error, 'isEligible')
@@ -141,7 +141,7 @@ export class RouteVideoResolver extends IncyclistService {
             const links = opts.links ?? this.getLinkSnapshot()
             if (route.linkShared)
                 return this.getLinkSharedAvailability(route, links, !!opts.hasDetails)
-            return this.getOtherAvailability(route, links, !!opts.hasDetails)
+            return this.getOtherAvailability(route, links)
         }
         catch (err) {
             this.logError(err as Error, 'getRouteAvailability')
@@ -210,26 +210,43 @@ export class RouteVideoResolver extends IncyclistService {
         }
     }
 
-    protected getOtherAvailability(route: VideoSourceInput, links: LinkSnapshot, hasDetails: boolean): RouteAvailability {
-        if ((route.isDownloaded && route.videoUrl && !isRemote(route.videoUrl)) || route.isLocal || route.hasVideo === false)
+    /**
+     * Availability of a route that exists on this device, from the markers of its description only
+     * (no urls, no details):
+     *
+     * - the video is on this device (`isLocal`, `isDownloaded`), or the route has none: `local`;
+     * - a connected computer that offers the video (`linkSources`): `fromLink` with its name;
+     * - the video is remote (`requiresDownload`), or nothing is known about the video yet: `remote`
+     *   (nothing is shown);
+     * - `unavailable` only if the markers prove that there is no source: not downloadable, no remote url,
+     *   no computer.
+     */
+    protected getOtherAvailability(route: VideoSourceInput, links: LinkSnapshot): RouteAvailability {
+        if (route.isLocal || route.isDownloaded)
             return { canStart: true, availability: 'local' }
 
-        // Without its details a route (summary only) carries no video URLs, so the lack of a source
-        // can not be told yet: stay neutral (nothing is shown) until the details are loaded.
-        if (!hasDetails && this.getRemoteUrl(route) === undefined) {
-            const linkId = this.getConnectedLinks(route.id!, [], links)[0]?.linkId
-            if (linkId)
-                return { canStart: true, availability: 'fromLink', sourceLabel: links.get(linkId)?.displayName, linkId }
-            return { canStart: true, availability: 'remote' }
-        }
+        const linkId = this.getConnectedSource(route.linkSources, links)
+        if (linkId)
+            return { canStart: true, availability: 'fromLink', sourceLabel: links.get(linkId)?.displayName, linkId }
 
-        if (!this.isEligible(route))
+        if (route.hasVideo === false)
+            return { canStart: true, availability: 'local' }
+        if (route.requiresDownload === false && this.getRemoteUrl(route) === undefined)
             return { canStart: false, availability: 'unavailable', unavailableReason: 'noSource' }
+        return { canStart: true, availability: 'remote' }
+    }
 
-        const linkId = this.getConnectedLinks(route.id!, [], links)[0]?.linkId
-        if (!linkId)
-            return { canStart: true, availability: 'remote' }
-        return { canStart: true, availability: 'fromLink', sourceLabel: links.get(linkId)?.displayName, linkId }
+    /** the computer of the markers that is connected and serves media now (the most recently seen one) */
+    protected getConnectedSource(linkSources: string[] | undefined, links: LinkSnapshot): string | undefined {
+        let found: string | undefined
+        for (const linkId of linkSources ?? []) {
+            const link = links.get(linkId)
+            if (!link?.connected || !link.mediaAvailable)
+                continue
+            if (found === undefined || link.lastSeenAt > links.get(found)!.lastSeenAt)
+                found = linkId
+        }
+        return found
     }
 
     protected getLinkSharedAvailability(route: VideoSourceInput, links: LinkSnapshot, hasDetails: boolean): RouteAvailability {

@@ -416,6 +416,9 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
             else {
                 description.tsImported = existing.tsImported
+                // not part of the API data: written by the route sharing sync, it must survive an update of the route
+                if (existing.linkSources)
+                    description.linkSources = existing.linkSources
                 items.push({route:new Route(description),added:false})
                 this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})                
             }

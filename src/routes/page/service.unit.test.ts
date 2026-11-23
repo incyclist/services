@@ -1018,21 +1018,18 @@ describe('RoutesPageService',()=>{
             expect(changed).toMatchObject({ availability: 'fromLink' })
         })
 
-        test('an unloaded non-shared route without URLs carries no unavailableReason and no sourceLabel (real resolver)', () => {
+        test('a non-shared route without markers is neutral, loaded or not (real resolver)', () => {
             Inject('SharingClient', { ...sharing, getRowsForRoute: jest.fn().mockReturnValue([]) })
             Inject('LocalLinkClient', { isSupported: () => true, getDisplayProps: () => ({ links: [] }), getSession: () => undefined })
             const real = new RouteVideoResolver()
             resolver.getRouteAvailability.mockImplementation((route: any, opts: any) => real.getRouteAvailability(route, opts))
-            setRoutes([item('o', { hasVideo: true })])
-            let res = s.getRoutesDisplayProps()
-            expect(res[0]).toMatchObject({ id: 'o', availability: 'remote' })
-            expect(res[0]).not.toHaveProperty('unavailableReason')
-            expect(res[0]).not.toHaveProperty('sourceLabel')
-
-            // once loaded and really without a source, it is reported
-            setRoutes([item('o', { hasVideo: true, loaded: true })])
-            res = s.getRoutesDisplayProps()
-            expect(res[0]).toMatchObject({ availability: 'unavailable', unavailableReason: 'noSource' })
+            for (const loaded of [false, true]) {
+                setRoutes([item('o', { hasVideo: true, loaded })])
+                const res = s.getRoutesDisplayProps()
+                expect(res[0]).toMatchObject({ id: 'o', availability: 'remote' })
+                expect(res[0]).not.toHaveProperty('unavailableReason')
+                expect(res[0]).not.toHaveProperty('sourceLabel')
+            }
             Inject('LocalLinkClient', null)
         })
 
@@ -1089,6 +1086,48 @@ describe('RoutesPageService',()=>{
                 expect(card2.setAvailabilityProps).toHaveBeenCalledWith(expect.objectContaining({ availability: 'unavailable' }))
                 expect(card2.emitUpdate).not.toHaveBeenCalled()
             })
+        })
+
+        test('a changed marker of a route description reaches its card (the page state may still hold the old one)', () => {
+            const cardA = {
+                setAvailabilityProps: jest.fn().mockReturnValue(true), emitUpdate: jest.fn(),
+                getRouteDescription: jest.fn().mockReturnValue({ id: 'a', hasVideo: true, requiresDownload: true }),
+            }
+            routeList.getCard.mockReturnValue(cardA)
+            setRoutes([item('a', { requiresDownload: true, linkSources: ['A'] })])
+            s.onLinkStateChanged()
+            expect(resolver.getRouteAvailability).toHaveBeenCalledWith(expect.not.objectContaining({ linkSources: expect.anything() }), expect.anything())
+            expect(cardA.emitUpdate).toHaveBeenCalledTimes(1)
+            expect(s.updatePageDisplay).not.toHaveBeenCalled()
+        })
+
+        test('2000 routes are prepared from their markers: no per-route row scan, no details', () => {
+            const rows = jest.fn().mockReturnValue([])
+            Inject('SharingClient', { ...sharing, getRowsForRoute: rows })
+            Inject('LocalLinkClient', {
+                isSupported: () => true,
+                getDisplayProps: () => ({ links: [{ linkId: 'A', displayName: 'Den PC', mediaAvailable: true, lastSeenAt: 1, reachability: 'reachable' }] }),
+                getSession: (linkId: string) => linkId === 'A' ? { capabilities: [] } : undefined,
+            })
+            const real = new RouteVideoResolver()
+            resolver.getRouteAvailability.mockImplementation((route: any, opts: any) => real.getRouteAvailability(route, opts))
+            resolver.getLinkSnapshot.mockImplementation(() => real.getLinkSnapshot())
+            const details = jest.fn()
+            routeList.getRoute = details
+            routeList.getRouteDetails = details
+            routeList.requestRouteDetails = details
+            const routes = Array.from({ length: 2000 }, (_v, i) => item(`r${i}`, i % 2 ? { hasVideo: true, requiresDownload: true, linkSources: ['A'] } : { hasVideo: true, requiresDownload: true }))
+            setRoutes(routes)
+
+            const res = s.getRoutesDisplayProps()
+
+            expect(res[1]).toMatchObject({ availability: 'fromLink', sourceLabel: 'Den PC' })
+            expect(res[0]).toMatchObject({ availability: 'remote' })
+            expect(res[0]).not.toHaveProperty('sourceLabel')
+            expect(rows).not.toHaveBeenCalled()
+            expect(details).not.toHaveBeenCalled()
+            expect(resolver.getLinkSnapshot).toHaveBeenCalledTimes(1)
+            Inject('LocalLinkClient', null)
         })
 
         test('a failure in the availability check leaves the list as it is', () => {

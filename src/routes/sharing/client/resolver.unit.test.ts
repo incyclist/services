@@ -343,39 +343,70 @@ describe('RouteVideoResolver', () => {
             expect(resolver.getRouteAvailability(downloaded)).toEqual({ canStart: true, availability: 'local' })
             expect(resolver.getRouteAvailability(official)).toEqual({ canStart: true, availability: 'remote' })
             link('A')
-            expect(resolver.getRouteAvailability(official)).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
+            // rows alone are not a source: the marker of the description is
+            expect(resolver.getRouteAvailability(official)).toEqual({ canStart: true, availability: 'remote' })
+            expect(resolver.getRouteAvailability({ ...official, linkSources: ['A'] })).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
         })
 
-        describe('official route without a source in its summary', () => {
-            const summary: VideoSourceInput = { id: 'r1', hasVideo: true }
+        describe('availability from the markers of the description only', () => {
+            const marked: VideoSourceInput = { id: 'r1', hasVideo: true }
 
-            test('details not loaded, no link: neutral, never unavailable and no label', () => {
-                const res = resolver.getRouteAvailability(summary, { hasDetails: false })
-                expect(res).toEqual({ canStart: true, availability: 'remote' })
-                expect(resolver.getRouteAvailability(summary)).toEqual({ canStart: true, availability: 'remote' })
+            test('no markers (no video information yet): neutral, no label, never unavailable', () => {
+                expect(resolver.getRouteAvailability(marked)).toEqual({ canStart: true, availability: 'remote' })
+                expect(resolver.getRouteAvailability(marked, { hasDetails: true })).toEqual({ canStart: true, availability: 'remote' })
             })
 
-            test('details loaded, no source at all: unavailable/noSource', () => {
-                expect(resolver.getRouteAvailability(summary, { hasDetails: true })).toEqual({ canStart: false, availability: 'unavailable', unavailableReason: 'noSource' })
-            })
-
-            test('details loaded with a remote URL: remote', () => {
-                expect(resolver.getRouteAvailability({ ...summary, videoUrl: 'https://cdn/x.mp4' }, { hasDetails: true })).toEqual({ canStart: true, availability: 'remote' })
-            })
-
-            test('details not loaded, a connected computer has it: fromLink with its name', () => {
+            test('requiresDownload, not downloaded, a connected computer offers it: fromLink with its name', () => {
                 link('A')
-                expect(resolver.getRouteAvailability(summary, { hasDetails: false })).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true, linkSources: ['A'] })).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
             })
 
-            test('details not loaded, computer offline: neutral', () => {
+            test('the most recently seen of several connected computers is named', () => {
+                link('A')
+                link('B')
+                link('C', {}, false)
+                lastSeen = { A: 1, B: 5, C: 9 }
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true, linkSources: ['A', 'B', 'C'] })).toMatchObject({ availability: 'fromLink', sourceLabel: 'PC B' })
+            })
+
+            test('requiresDownload, the computer is offline: remote, no label', () => {
                 link('A', {}, false)
-                expect(resolver.getRouteAvailability(summary, { hasDetails: false })).toEqual({ canStart: true, availability: 'remote' })
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true, linkSources: ['A'] })).toEqual({ canStart: true, availability: 'remote' })
             })
 
-            test('a local copy keeps precedence', () => {
+            test('a computer without media does not count', () => {
+                link('A', { mediaAvailable: false })
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true, linkSources: ['A'] })).toEqual({ canStart: true, availability: 'remote' })
+            })
+
+            test('a marker of a computer that is not paired any more is ignored', () => {
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true, linkSources: ['gone'] })).toEqual({ canStart: true, availability: 'remote' })
+            })
+
+            test('requiresDownload, no computer: remote, no label', () => {
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true })).toEqual({ canStart: true, availability: 'remote' })
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true, linkSources: [] })).toEqual({ canStart: true, availability: 'remote' })
+            })
+
+            test('on this device (downloaded or local): local, even if a computer offers it', () => {
                 link('A')
-                expect(resolver.getRouteAvailability({ ...summary, isDownloaded: true, videoUrl: 'file:///data/x.mp4' }, { hasDetails: false })).toEqual({ canStart: true, availability: 'local' })
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: true, isDownloaded: true, linkSources: ['A'] })).toEqual({ canStart: true, availability: 'local' })
+                expect(resolver.getRouteAvailability({ ...marked, isLocal: true, linkSources: ['A'] })).toEqual({ canStart: true, availability: 'local' })
+            })
+
+            test('the markers prove there is no source: unavailable/noSource', () => {
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: false })).toEqual({ canStart: false, availability: 'unavailable', unavailableReason: 'noSource' })
+            })
+
+            test('a remote url keeps a route that is not downloadable streamable', () => {
+                expect(resolver.getRouteAvailability({ ...marked, requiresDownload: false, videoUrl: 'https://cdn/x.mp4' })).toEqual({ canStart: true, availability: 'remote' })
+            })
+
+            test('no details access and no request: the rows are not read for a route that is not shared', () => {
+                link('A')
+                sharing.getRowsForRoute.mockClear()
+                resolver.getRouteAvailability({ ...marked, requiresDownload: true, linkSources: ['A'] }, { links: resolver.getLinkSnapshot() })
+                expect(sharing.getRowsForRoute).not.toHaveBeenCalled()
             })
         })
 

@@ -57,6 +57,10 @@ export interface VideoSourceInput {
     /** created from a computer's catalog: the video can only come from a computer */
     linkShared?: boolean
     isDownloaded?: boolean
+    /** the video is not part of the route record: it is online or downloadable (a `RouteInfo` marker) */
+    requiresDownload?: boolean
+    /** the paired computers whose catalog offers the video of the route (a `RouteInfo` marker written by the sync) */
+    linkSources?: string[]
     videoUrl?: string
     originalVideoUrl?: string
     downloadUrl?: string
