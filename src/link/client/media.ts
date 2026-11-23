@@ -83,6 +83,9 @@ export class LinkMediaPath {
         await this.stopPipe(linkId)
         try {
             const started = await getBindings().loopbackPipe!.start({ upstreamHost: host, upstreamPort: mediaPort })
+            // an implementation may signal a failed start with port 0 instead of rejecting
+            if (!started?.port)
+                return undefined
             const info = { upstreamHost: host, upstreamPort: mediaPort, port: started.port }
             this.pipes.set(linkId, info)
             return info

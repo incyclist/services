@@ -26,8 +26,8 @@ export interface ILoopbackPipeBinding {
     /**
      * Starts a pipe to the given upstream.
      *
-     * @returns the loopback port players connect to
-     * @throws when the listener cannot be started
+     * @returns the loopback port players connect to; port 0 means the listener could not be started
+     * @throws when the listener cannot be started (an implementation may resolve with port 0 instead)
      */
     start(opts: LoopbackPipeOptions): Promise<{ port: number }>
 

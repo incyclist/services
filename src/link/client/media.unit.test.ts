@@ -64,6 +64,12 @@ describe('LinkMediaPath', () => {
         pipe.start.mockRejectedValue(new Error('x'))
         expect(await media.getBaseUrl('l1', '192.168.1.2', 6002)).toBeUndefined()
     })
+    test('a pipe that starts with port 0 means no media', async () => {
+        platform = 'android'
+        bindings.loopbackPipe = pipe
+        pipe.start.mockResolvedValue({ port: 0 })
+        expect(await media.getBaseUrl('l1', '192.168.1.2', 6002)).toBeUndefined()
+    })
     test('the pipe can be switched on for iOS, but only when the binding exists', async () => {
         media.setPipeEnabled(true)
         expect(media.usesPipe()).toBe(false)
