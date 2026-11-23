@@ -65,14 +65,15 @@ describe('buildCatalog', () => {
             route({ id: 'c', isLocal: true, routeHash: 'hc', videoUrl: 'video:///d/c' }),
             route({ id: 'd', isLocal: true, routeHash: 'hd', videoUrl: 'video:///d/constructor' }),
             route({ id: 'e', isLocal: true, routeHash: 'he', videoUrl: 'video:///d/e.MP4', previewUrl: 'file:///d/e.PNG' }),
-        ], opts({ '/d/a.mp4': 1, '/d/e.MP4': 1, '/d/e.PNG': 3 }))
+            route({ id: 'f', isLocal: true, routeHash: 'hf', videoUrl: 'video:///d/f.avi' }),
+        ], opts({ '/d/a.mp4': 1, '/d/e.MP4': 1, '/d/e.PNG': 3, '/d/f.avi': 5 }))
 
         expect(res.document.routes.map(r => r.routeKey)).toEqual(['ha', 'he'])
         expect(res.document.routes[0].thumbHandle).toBeUndefined()
         expect(res.document.routes[1].thumbHandle).toBeDefined()
         expect(res.handles.map(h => h.path)).toEqual(['/d/a.mp4', '/d/e.MP4', '/d/e.PNG'])
         expect(res.handles.every(h => h.contentType !== undefined)).toBe(true)
-        expect(res.skipped).toEqual({ video: 3, thumbnail: 1, missingVideo: 0 })
+        expect(res.skipped).toEqual({ video: 4, thumbnail: 1, missingVideo: 0 })
     })
 
     test('a preview file that is missing or empty gets no thumbHandle, is counted, and the route stays', async () => {
