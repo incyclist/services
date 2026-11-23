@@ -375,7 +375,9 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
     private async processRouteFromApi(descr,items) {
         let description;
-        const existing = this.getDescriptionFromDB(descr.routeId??descr.id)
+        // a placeholder that was created from a paired computer's catalog is not a route of this device: the official route replaces it
+        const stored = this.getDescriptionFromDB(descr.routeId??descr.id)
+        const existing = stored?.linkShared ? undefined : stored
         const alreadyProcessed = this.processed.includes(descr.routeId??descr.id)
 
         if (alreadyProcessed)

@@ -285,6 +285,23 @@ describe('RoutesApiLoader', () => {
             expect(dbSave).not.toHaveBeenCalled()
         })
 
+        test('a persisted placeholder created from a paired computer does not block the official route with the same id', async () => {
+            dbGetDescription.mockReturnValue({ id: 'r1', version: 2, isLocal: true, linkShared: true, hasVideo: true })
+            dbGetDetails.mockResolvedValue(detail())
+            setupApi({ gpx: [descr({ id: 'r1', version: 1 })] })
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+
+            const { added, updated } = await waitDone(service.load())
+
+            const routes = [...added, ...updated].filter(r => r.description.id === 'r1')
+            expect(routes.length).toBeGreaterThan(0)
+            routes.forEach(r => {
+                expect(r.description.linkShared).toBeFalsy()
+                expect(r.description.isLocal).toBe(false)
+            })
+        })
+
         test('existing, up to date route missing details: still triggers a detail load', async () => {
             dbGetDescription.mockReturnValue({ id: 'r1', version: 2 })
             dbGetDetails.mockResolvedValue(undefined)

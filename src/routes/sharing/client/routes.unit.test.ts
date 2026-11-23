@@ -20,7 +20,8 @@ class FakeList implements MaterializerRouteList {
     addCalls = 0
     getAllRoutes = () => this.routes
     isStillLoading = () => this.loading
-    getRoute = (id: string) => this.routes?.find(r => r.description.id === id)
+    /** like the real list: tombstoned routes are not visible to a lookup */
+    getRoute = (id: string) => this.routes?.find(r => r.description.id === id && !r.description.isDeleted)
     getSelected = () => this.selected
     addRoutes = jest.fn((routes: Route[]) => {
         this.addCalls++
@@ -100,6 +101,43 @@ describe('SharedRouteMaterializer', () => {
             expect(list.getRoute(HASH_A)!.description.title).toBe('mine')
             expect(list.getRoute(HASH_A)!.description.linkShared).toBeUndefined()
             expect(list.addRoutes).not.toHaveBeenCalled()
+        })
+
+        test('a tombstoned route of the phone with the same id is left untouched', async () => {
+            list.routes = [new Route({ id: HASH_A, title: 'mine', isLocal: true, isDeleted: true })]
+            const res = await materializer.materialize([entry(HASH_A)])
+            expect(res).toMatchObject({ added: 0, updated: 0, skippedOwn: 1 })
+            expect(list.routes).toHaveLength(1)
+            expect(list.routes[0].description.linkShared).toBeUndefined()
+            expect(list.addRoutes).not.toHaveBeenCalled()
+            expect(list.saveRoute).not.toHaveBeenCalled()
+        })
+
+        test('a route of the phone with the same routeHash but another id (e.g. an official route) is not duplicated', async () => {
+            list.routes = [new Route({ id: 'srv-1', routeHash: HASH_A, title: 'official' })]
+            const res = await materializer.materialize([entry(HASH_A)])
+            expect(res).toMatchObject({ added: 0, updated: 0, skippedOwn: 1 })
+            expect(list.routes).toHaveLength(1)
+            expect(list.addRoutes).not.toHaveBeenCalled()
+        })
+
+        test('an official entry is never materialised, even if its key looks like a hash', async () => {
+            const res = await materializer.materialize([entry(HASH_A, { origin: 'official' })])
+            expect(res).toMatchObject({ added: 0, updated: 0 })
+            expect(list.routes).toHaveLength(0)
+        })
+
+        test('a placeholder is dropped when the phone gets the same route under another id; the phone route is not touched', async () => {
+            await materializer.materialize([entry(HASH_A)])
+            const mine = new Route({ id: 'srv-1', routeHash: HASH_A, title: 'official' })
+            list.routes!.push(mine)
+
+            const res = await materializer.materialize([entry(HASH_A)])
+
+            expect(list.removed).toEqual([HASH_A])
+            expect(res!.removed).toBe(1)
+            expect(list.routes).toEqual([mine])
+            expect(mine.description.linkShared).toBeUndefined()
         })
 
         test('local routes without a hash are not materialised and do not crash', async () => {

@@ -1133,6 +1133,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     public async removeSharedRoute(route:Route):Promise<boolean> {
         try {
             const id = route.description.id
+            const current = this.routes.find( r=>r.description?.id===id)
+            if (current && !current.description?.linkShared)
+                return false
             const card = this.findCard(id)?.card
             if (card) {
                 await card.delete({enforced:true,source:'system'}).wait()
@@ -1151,12 +1154,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     /** @returns true if the lists changed and an `updated` event is due */
     protected addRouteToLists(route:Route,source:'user'|'system'|'import'):boolean {
         // route already present
-        const existing = source==='system' ? this.getRoute(route.description.id) :
-            this.routes.find( r=>r.description?.id===route.description.id)
-           
+        // tombstoned routes are part of the lookup: a route of the user must never be shadowed or duplicated
+        const existing = this.routes.find( r=>r.description?.id===route.description.id && (source!=='system' || !r.description?.isDeleted || !!route.description?.linkShared))
+
+        // a route created from a paired computer's catalog never touches a route that is not such a placeholder
+        if (existing && route.description?.linkShared && !existing.description?.linkShared)
+            return false
 
         if (existing ) {
             const wasDeleted = existing.description?.isDeleted
+            // the real route arrived after its placeholder: nothing of the placeholder (details, source) may stay
+            if (existing.description?.linkShared && !route.description?.linkShared)
+                existing.details = undefined
             existing.replace(route)
 
             // a system update refreshes a route in place; an explicit user import must also

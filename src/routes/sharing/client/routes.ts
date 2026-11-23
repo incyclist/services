@@ -68,7 +68,7 @@ export class SharedRouteMaterializer {
             list.addRoutes(changed, 'system')
             await this.save(list, changed)
         }
-        result.removed = await this.removeOrphans()
+        result.removed = await this.removeSuperseded(list) + await this.removeOrphans()
         this.deps.log({ message: 'shared routes materialized', ...result })
         return result
     }
@@ -104,6 +104,13 @@ export class SharedRouteMaterializer {
         if (!summary || entry.routeHash !== routeKey)
             return undefined
 
+        // the phone's own route wins, whatever its state (a tombstoned route is not visible to getRoute()),
+        // and whether it is known by the id or only by the content hash
+        const own = this.findOwn(list, routeKey)
+        if (own) {
+            result.skippedOwn++
+            return undefined
+        }
         const existing = list.getRoute(routeKey)
         if (!existing) {
             result.added++
@@ -125,6 +132,37 @@ export class SharedRouteMaterializer {
                 delete descr[key]
         }
         return new Route(descr)
+    }
+
+    /** a route of this device that is not a placeholder and has the key as id or as content hash */
+    protected findOwn(list: MaterializerRouteList, routeKey: string): Route | undefined {
+        return (list.getAllRoutes() ?? []).find(r => {
+            const descr = r.description
+            return !descr?.linkShared && (descr?.id === routeKey || descr?.routeHash === routeKey)
+        })
+    }
+
+    /**
+     * Drops placeholders for which the phone has a route of its own under another id (e.g. the official
+     * route arrived after the placeholder was created). Same-id duplicates are resolved by the route list.
+     */
+    protected async removeSuperseded(list: MaterializerRouteList): Promise<number> {
+        const all = list.getAllRoutes() ?? []
+        const superseded = all.filter(route => {
+            const descr = route.description
+            return descr?.linkShared && !hasLocalCopy(descr) && all.some(o => o !== route && !o.description?.linkShared && o.description?.id !== descr.id && o.description?.routeHash === descr.routeHash)
+        })
+        let removed = 0
+        for (const route of superseded) {
+            try {
+                if (await list.removeSharedRoute(route) !== false)
+                    removed++
+            }
+            catch (err) {
+                this.deps.logError(err as Error, 'removeSuperseded')
+            }
+        }
+        return removed
     }
 
     protected async save(list: MaterializerRouteList, routes: Route[]): Promise<void> {

@@ -1990,6 +1990,54 @@ describe('RouteListService',()=>{
             expect(service.getRoute('sh2')).toBeDefined()
         })
 
+        describe('a shared route never replaces a local route',()=>{
+            const local = (extra:Record<string,unknown>={}) => new Route({ id:'sh1', routeHash:'sh1', title:'Mine', isLocal:true, hasVideo:true, videoUrl:'file:///mine.mp4', distance:5, ...extra } as any)
+
+            test('visible local route with the same id is left untouched',()=>{
+                service.addRoute(local())
+                service.addRoutes([shared()],'system')
+
+                const route = service.getRoute('sh1')!
+                expect(route.description.linkShared).toBeUndefined()
+                expect(route.description.title).toBe('Mine')
+                expect(route.description.videoUrl).toBe('file:///mine.mp4')
+                expect((service as any).routes.filter( (r:Route)=>r.description.id==='sh1')).toHaveLength(1)
+            })
+
+            test('tombstoned local route with the same id is left untouched and not duplicated',()=>{
+                service.addRoute(local({isDeleted:true}))
+                service.addRoutes([shared()],'system')
+
+                const all = (service as any).routes.filter( (r:Route)=>r.description.id==='sh1')
+                expect(all).toHaveLength(1)
+                expect(all[0].description.linkShared).toBeUndefined()
+                expect(all[0].description.isDeleted).toBe(true)
+            })
+
+            test('removeSharedRoute refuses a route that is not a shared placeholder',async ()=>{
+                service.addRoute(local())
+                const res = await service.removeSharedRoute(shared())
+
+                expect(res).toBe(false)
+                expect((service as any).db.delete).not.toHaveBeenCalled()
+                expect(service.getRoute('sh1')).toBeDefined()
+            })
+
+            test('a local route that arrives after the placeholder replaces it completely',()=>{
+                const placeholder = shared()
+                placeholder.details = { id:'sh1', title:'Shared', points:[], video:{url:'http://desktop/v/x'} } as any
+                service.addRoute(placeholder)
+
+                service.addRoute(local(),'system')
+
+                const route = service.getRoute('sh1')!
+                expect(route.description.linkShared).toBeUndefined()
+                expect(route.description.title).toBe('Mine')
+                expect(route.details).toBeUndefined()
+                expect((service as any).routes.filter( (r:Route)=>r.description.id==='sh1')).toHaveLength(1)
+            })
+        })
+
         test('a route added through addRoutes shows up on an open Routes page without reopening it',()=>{
             const page = new RoutesPageService()
             Inject('RouteList', service)

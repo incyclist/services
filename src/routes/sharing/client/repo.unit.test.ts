@@ -31,6 +31,11 @@ describe('SharedRouteRepo', () => {
     })
 
     describe('replaceForLink', () => {
+        test('keeps the rows of official entries (they are a video source, never a route of the list)', async () => {
+            await repo.replaceForLink('A', [{ ...entry('srv-1'), origin: 'official' }], 100)
+            expect(repo.getByRouteKey('srv-1')).toHaveLength(1)
+        })
+
         test('writes one row per entry, keyed by link and route', async () => {
             const res = await repo.replaceForLink('A', [entry('x'), entry('y')], 100)
             expect(res).toEqual({ added: 2, removed: 0, kept: 0 })

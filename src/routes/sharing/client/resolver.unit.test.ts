@@ -179,6 +179,31 @@ describe('RouteVideoResolver', () => {
             expect(await resolver.resolve({ ...official, isLocal: true })).toEqual({ source: 'unavailable' })
         })
 
+        test('a local official route without its video streams from a computer that has it (origin official row), the record is not changed', async () => {
+            existing.clear()
+            rows = [row('A')]
+            sessions.add('A')
+            const input = { ...downloaded }
+            const res = await resolver.resolve(input)
+            expect(res).toMatchObject({ source: 'link', linkId: 'A' })
+            expect(input).toEqual(downloaded)
+        })
+
+        test('rows of another route are not a source', async () => {
+            sharing.getRowsForRoute.mockImplementation((key: string) => rows.filter(r => r.routeKey === key))
+            rows = [row('A', 'other')]
+            sessions.add('A')
+            expect(await resolver.resolve(official)).toEqual({ source: 'remote', url: 'https://cdn/x.mp4' })
+            expect(resolver.getRouteAvailability(official)).toMatchObject({ availability: 'remote' })
+        })
+
+        test('an offline computer leaves the official route on the remote original', async () => {
+            rows = [row('A')]
+            unreachable.add('A')
+            expect(resolver.getRouteAvailability(official)).toMatchObject({ availability: 'remote' })
+            expect(await resolver.resolve(official)).toEqual({ source: 'remote', url: 'https://cdn/x.mp4' })
+        })
+
         test('the result is never written back to the route', async () => {
             rows = [row('A')]
             sessions.add('A')
