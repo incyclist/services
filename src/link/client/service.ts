@@ -16,7 +16,6 @@ import {
     BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS,
 } from './consts'
 import { LinkMediaPath } from './media'
-import { meetsNativeVersion } from './native-requirements'
 import { LinkPairingFlow } from './pairing'
 import type { PairTarget } from './pairing'
 import { LinkRecoveryGate } from './recovery'
@@ -28,6 +27,9 @@ import type {
 
 const BUSY_RIDE_STATES: CurrentRideState[] = ['Starting', 'Started', 'Active', 'Paused', 'Closing']
 const EXCLUSIVE_OWNER = 'local-link'
+/** native capability: control connection and discovery are available in the installed native app */
+const NATIVE_FEATURE_LOCAL_LINK = 'local-link'
+// 'local-link-media' (Android loopback pipe / network config) is reserved: media availability is decided by the pipe binding
 
 interface ActiveSession {
     conn: LinkClientConnection
@@ -343,11 +345,17 @@ export class LocalLinkClientService extends IncyclistService {
     }
 
     /**
-     * The installed native version (not the OTA bundle version) must be at or above the minimum
-     * of its platform. Fails closed: unreleased minimum, unknown platform or unreadable version.
+     * The native app must signal that it carries the native side of the link, the same way the
+     * desktop shell announces its capabilities. A binary that does not signal (an old one) has
+     * no capability: fails closed by absence, also if the query throws.
      */
     protected meetsNativeRequirements(): boolean {
-        return meetsNativeVersion(this.getPlatform(), getBindings()?.appInfo?.getAppVersion())
+        try {
+            return getBindings()?.appInfo?.hasNativeFeature?.(NATIVE_FEATURE_LOCAL_LINK) === true
+        }
+        catch {
+            return false
+        }
     }
 
     protected getPlatform(): LinkClientPlatform {
