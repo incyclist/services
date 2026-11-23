@@ -983,10 +983,14 @@ export class LocalLinkClientService extends IncyclistService {
     }
 
     protected onReconnectTimer(linkId: string): void {
+        void this.reconnect(linkId)
+    }
+
+    protected async reconnect(linkId: string): Promise<void> {
         try {
-            this.ensureSession(linkId, 'reconnect')
-                .then(session => { if (!session) this.scheduleReconnect(linkId) })
-                .catch(err => this.logError(err, 'reconnect'))
+            const session = await this.ensureSession(linkId, 'reconnect')
+            if (!session)
+                this.scheduleReconnect(linkId)
         }
         catch (err) {
             this.logError(err as Error, 'reconnect')

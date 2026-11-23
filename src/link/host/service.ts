@@ -136,7 +136,7 @@ export class LocalLinkService extends IncyclistService {
         try {
             this.pairingWanted = false
             this.pairing.close()
-            if (this.getClients().length === 0 && (this.running || this.starting))
+            if (this.getClients().length === 0 && (this.running || this.starting !== undefined))
                 await this.stopTransport()
             this.emitState()
         }
@@ -432,13 +432,18 @@ export class LocalLinkService extends IncyclistService {
         if (this.unsubscribe)
             return
         this.unsubscribe = link.onEvent(e => {
-            try {
-                this.onLinkEvent(e).catch(err => this.logError(err, 'onLinkEvent'))
-            }
-            catch (err) {
-                this.logError(err as Error, 'onLinkEvent')
-            }
+            void this.handleLinkEvent(e)
         })
+    }
+
+    /** Dispatches a transport event; neither a throw nor a rejection escapes. */
+    protected async handleLinkEvent(e: LocalLinkEvent): Promise<void> {
+        try {
+            await this.onLinkEvent(e)
+        }
+        catch (err) {
+            this.logError(err as Error, 'onLinkEvent')
+        }
     }
 
     protected async reannounce(): Promise<void> {

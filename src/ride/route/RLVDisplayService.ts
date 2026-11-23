@@ -644,23 +644,31 @@ export class RLVDisplayService extends RouteDisplayService {
                 return false
 
             video.fellThrough = true
-            this.applyLinkSource(video, [video.linkId])
-                .then( changed => {
-                    if (changed) {
-                        this.logEvent({message: 'video source changed after load failure'})
-                        delete video.error
-                        this.initVideoSource(video)
-                        this.emit('state-update')
-                        return
-                    }
-                    this.reportVideoLoadError(error,video)
-                })
-                .catch( err=>{ this.logError(err,'fallThroughToNextSource'); this.reportVideoLoadError(error,video) })
+            void this.tryNextSource(error, video)
             return true
         }
         catch(err) {
             this.logError(err,'fallThroughToNextSource')
             return false
+        }
+    }
+
+    /** Applies the next source; if there is none (or it fails), the load error is reported. Never rejects. */
+    protected async tryNextSource(error:MediaError, video:VideoState):Promise<void> {
+        try {
+            const changed = await this.applyLinkSource(video, [video.linkId])
+            if (changed) {
+                this.logEvent({message: 'video source changed after load failure'})
+                delete video.error
+                this.initVideoSource(video)
+                this.emit('state-update')
+                return
+            }
+            this.reportVideoLoadError(error,video)
+        }
+        catch(err) {
+            this.logError(err,'fallThroughToNextSource')
+            this.reportVideoLoadError(error,video)
         }
     }
 

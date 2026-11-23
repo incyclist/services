@@ -249,10 +249,10 @@ export class RouteSharingClientService extends IncyclistService {
     syncLink(linkId: string, opts: SyncOptions = {}): Promise<SyncResult> {
         try {
             const running = this.running.get(linkId)
-            if (running && !opts.force)
+            if (running !== undefined && !opts.force)
                 return running
             // runSync never rejects
-            const run = (running ? running.catch(() => undefined) : Promise.resolve())
+            const run = (running === undefined ? Promise.resolve() : running.catch(() => undefined))
                 .then(() => this.runSync(linkId, opts))
                 .finally(() => { if (this.running.get(linkId) === run) this.running.delete(linkId) })
             this.running.set(linkId, run)
@@ -378,15 +378,10 @@ export class RouteSharingClientService extends IncyclistService {
 
         const list = this.getRouteList()
         const onLoaded = () => {
-            try {
-                this.materializeCached().catch(err => this.logError(err, 'materialize'))
-                // the sync may have been done before the list was there: the markers come from the saved rows
-                this.repo.load().then(() => this.reconcileMarkers()).catch(err => this.logError(err, 'markers'))
-                this.syncAll().catch(err => this.logError(err, 'preload'))
-            }
-            catch (err) {
-                this.logError(err as Error, 'preload')
-            }
+            void this.guard('materialize', () => this.materializeCached())
+            // the sync may have been done before the list was there: the markers come from the saved rows
+            void this.guard('markers', async () => { await this.repo.load(); this.reconcileMarkers() })
+            void this.guard('preload', () => this.syncAll())
         }
         list.on('load-done', onLoaded)
         this.unsubscribers.push(() => list.off('load-done', onLoaded))
@@ -396,6 +391,16 @@ export class RouteSharingClientService extends IncyclistService {
         list.on('routes-added', onRoutesChanged)
         list.on('api-reload-done', onRoutesChanged)
         this.unsubscribers.push(() => { list.off('routes-added', onRoutesChanged); list.off('api-reload-done', onRoutesChanged) })
+    }
+
+    /** Runs an operation in the background; neither a throw nor a rejection escapes, it is logged. */
+    protected async guard(context: string, op: () => Promise<unknown>): Promise<void> {
+        try {
+            await op()
+        }
+        catch (err) {
+            this.logError(err as Error, context)
+        }
     }
 
     protected onSessionChanged(e: { linkId: string, session?: LinkClientSession }): void {
@@ -691,7 +696,7 @@ export class RouteSharingClientService extends IncyclistService {
         const capable = rows.filter(r => client.getSession(r.linkId)?.capabilities.includes('route-descriptor'))
         if (capable.length === 0)
             throw new DescriptorLoadError(rows.length > 0 ? 'unsupported' : 'unreachable')
-        return capable.sort((a, b) => (lastSeen.get(b.linkId) ?? 0) - (lastSeen.get(a.linkId) ?? 0)).map(r => r.linkId)
+        return capable.toSorted((a, b) => (lastSeen.get(b.linkId) ?? 0) - (lastSeen.get(a.linkId) ?? 0)).map(r => r.linkId)
     }
 
     /** Asks the candidates one after the other; the first computer that hands out a document wins. */

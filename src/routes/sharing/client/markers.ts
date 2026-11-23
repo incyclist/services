@@ -36,6 +36,13 @@ export const selectCandidateRows = (rows: SharedRouteEntry[], id: string | undef
     })
 }
 
+/** plain code-unit order: identical on every device, unlike a locale-aware compare */
+const byCodeUnit = (a: string, b: string): number => {
+    if (a === b)
+        return 0
+    return a < b ? -1 : 1
+}
+
 const sameList = (a: string[], b: string[]): boolean => a.length === b.length && a.every((v, i) => v === b[i])
 
 /**
@@ -91,7 +98,7 @@ export class RouteLinkMarker {
                 if (!descr?.id || descr.linkShared)
                     continue
                 const wanted = this.getWanted(byKey, descr.id, descr.routeHash)
-                if (!sameList(wanted, [...(descr.linkSources ?? [])].sort()))
+                if (!sameList(wanted, [...(descr.linkSources ?? [])].sort(byCodeUnit)))
                     updates.push({ id: descr.id, linkSources: wanted })
             }
             const changed = updates.length > 0 ? list.updateLinkSources(updates) : 0
@@ -108,6 +115,6 @@ export class RouteLinkMarker {
     /** the sorted computers that offer a route; only the rows of its two keys are looked at */
     protected getWanted(byKey: Map<string, SharedRouteEntry[]>, id: string, routeHash?: string): string[] {
         const candidates = [...(byKey.get(id) ?? []), ...(routeHash ? byKey.get(routeHash) ?? [] : [])]
-        return [...new Set(selectCandidateRows(candidates, id, routeHash).map(r => r.linkId))].sort()
+        return [...new Set(selectCandidateRows(candidates, id, routeHash).map(r => r.linkId))].sort(byCodeUnit)
     }
 }

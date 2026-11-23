@@ -115,21 +115,15 @@ export class RouteSharingService extends IncyclistService {
 
     /** Rebuilds the catalog from the route list and republishes it. */
     refresh(): Promise<void> {
-        try {
-            if (this.refreshing) {
-                this.refreshAgain = true
-                return this.refreshing
-            }
-            // concurrent callers share one run; the run never rejects
-            this.refreshing = this.runRefresh()
-                .catch(err => this.logError(err as Error, 'refresh'))
-                .finally(() => { this.refreshing = undefined })
+        if (this.refreshing !== undefined) {
+            this.refreshAgain = true
             return this.refreshing
         }
-        catch (err) {
-            this.logError(err as Error, 'refresh')
-            return Promise.resolve()
-        }
+        // concurrent callers share one run; the run never rejects (runRefresh is async)
+        this.refreshing = this.runRefresh()
+            .catch(err => this.logError(err as Error, 'refresh'))
+            .finally(() => { this.refreshing = undefined })
+        return this.refreshing
     }
 
     /**

@@ -181,7 +181,7 @@ export class RouteVideoResolver extends IncyclistService {
     getThumbnailLink(routeKey: string, preferLinkId?: string): { linkId: string, thumbHandle: string } | undefined {
         try {
             const rows = this.getSharingClient().getRowsForRoute(routeKey).filter(r => !!r.thumbHandle)
-            const row = rows.find(r => r.linkId === preferLinkId) ?? rows.sort((a, b) => b.lastConfirmedAt - a.lastConfirmedAt)[0]
+            const row = rows.find(r => r.linkId === preferLinkId) ?? rows.toSorted((a, b) => b.lastConfirmedAt - a.lastConfirmedAt)[0]
             return row ? { linkId: row.linkId, thumbHandle: row.thumbHandle! } : undefined
         }
         catch (err) {
@@ -266,7 +266,7 @@ export class RouteVideoResolver extends IncyclistService {
             return { canStart: false, availability: 'unavailable', unavailableReason: 'versionMismatch', sourceLabel }
         }
 
-        const last = rows.sort(byRecency)[0]
+        const last = rows.toSorted(byRecency)[0]
         if (!last)
             return { canStart: false, availability: 'unavailable', unavailableReason: 'noSource' }
         const link = links.get(last.linkId)!
