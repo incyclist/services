@@ -95,8 +95,11 @@ export interface MaterializeResult {
     skippedNoHash: number
 }
 
-/** What triggered the load of a route's details from a computer. */
-export type DescriptorTrigger = 'details' | 'ride' | 'copy'
+/**
+ * What triggered the load of a route's details from a computer. `list` is a row of the route list
+ * asking on its own; it does not repeat a load that failed recently, the other triggers always try.
+ */
+export type DescriptorTrigger = 'list' | 'details' | 'ride' | 'copy'
 
 /** Why the details of a route could not be loaded from a computer. */
 export type DescriptorFailure =

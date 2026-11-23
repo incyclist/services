@@ -39,6 +39,7 @@ import { useRouteShapeStore } from "../shapes/store";
 import type { RouteShape } from "../shapes/types";
 import { useRouteLibraryScanner } from "../library/service";
 import { useRouteSharingClient } from "../sharing/client/service";
+import type { DescriptorTrigger } from "../sharing/client/types";
 import { useIncyclistRoutesApi } from "../base/api/factory";
 import { pascalCase } from "../../utils";
 import { useFreeRideService } from "../free-ride";
@@ -734,7 +735,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
 
-    async getRouteDetails(id:string, expectLocal=false):Promise<RouteDetailUIItem> {
+    async getRouteDetails(id:string, expectLocal=false, trigger:DescriptorTrigger='details'):Promise<RouteDetailUIItem> {
         try {
             const route = this.getVisibleRoutes().find( r => r.description.id===id)
             if (!route) 
@@ -745,7 +746,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
 
             if (!route.details) {
-                await this.loadRouteDetails(route, id);
+                await this.loadRouteDetails(route, id, trigger);
             }
 
             this.backfillRouteShape(route)
@@ -781,7 +782,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      */
     requestRouteDetails(id:string, onResult:(details?:RouteDetailUIItem)=>void):()=>void {
         try {
-            this.detailsQueue ??= new RouteDetailsQueue<RouteDetailUIItem>( (routeId:string) => this.getRouteDetails(routeId) )
+            this.detailsQueue ??= new RouteDetailsQueue<RouteDetailUIItem>( (routeId:string) => this.getRouteDetails(routeId, false, 'list') )
             return this.detailsQueue.request(id, onResult)
         }
         catch(err) {
@@ -2315,12 +2316,12 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
 
-    protected async loadRouteDetails(route: Route, id: string) {
+    protected async loadRouteDetails(route: Route, id: string, trigger:DescriptorTrigger='details') {
         route.details = await this.db.getDetails(id);
 
         // created from a paired computer's catalog: the details come from that computer, never from an API
         if (!route.details && route.description.linkShared) {
-            await this.loadSharedRouteDetails(route)
+            await this.loadSharedRouteDetails(route, trigger)
         }
 
         // not in DB yet? must come from external app or API 
@@ -2350,9 +2351,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     /** A computer that can not be reached leaves the details absent: the summary stays, the route can not be started. */
-    protected async loadSharedRouteDetails(route: Route) {
+    protected async loadSharedRouteDetails(route: Route, trigger:DescriptorTrigger='details') {
         try {
-            await this.getRouteSharingClient().loadDescriptor(route, 'details')
+            await this.getRouteSharingClient().loadDescriptor(route, trigger)
         }
         catch {
             // already logged by the client
@@ -2531,12 +2532,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const outDir = path.join( appInfo.getAppDir(),'previewImg')
         await fs.ensureDir(outDir)
 
+        // without a video there is nothing to look next to and nothing to take a screenshot of
+        if (!videoUrl)
+            return;
+
         const existing = await this.checkExistingPreviewFiles(descr)
         if (existing)
             return existing
-
-        if (!videoUrl)
-            return;
 
         if (!await this.getPreviewStore().isScreenshotAllowed(descr))
             return;

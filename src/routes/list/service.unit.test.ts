@@ -1479,6 +1479,17 @@ describe('RouteListService',()=>{
                 expect(result).toBe('screenshot')
                 expect(d.previewUrl).toBe('screenshot')
             })
+
+            test('a route without a video is not looked up next to a video and takes no screenshot', async () => {
+                const d = descr({ videoUrl:undefined })
+                const check = jest.spyOn(service as any, 'checkExistingPreviewFiles')
+
+                const result = await (service as any).doCreatePreview(d)
+
+                expect(result).toBeUndefined()
+                expect(check).not.toHaveBeenCalled()
+                expect(getBindings().video.screenshot).not.toHaveBeenCalled()
+            })
         })
 
         describe('with the preview store', () => {
@@ -1852,8 +1863,20 @@ describe('RouteListService',()=>{
             service.requestRouteDetails('r1', onResult)
             await settle()
 
-            expect(spy).toHaveBeenCalledWith('r1')
+            // a row asking on its own is a list fetch: it must not repeat a descriptor load that just failed
+            expect(spy).toHaveBeenCalledWith('r1', false, 'list')
             expect(onResult).toHaveBeenCalledWith(details)
+        })
+
+        test('a shared route without details and without country does not load its descriptor to verify the country',()=>{
+            const loadDescriptor = jest.fn()
+            service.inject('RouteSharingClient', { loadDescriptor })
+            const route = { details: undefined, description: { linkShared: true }, updateCountryFromPoints: jest.fn() }
+
+            ;(service as any).verifyRouteCountry(route)
+
+            expect(loadDescriptor).not.toHaveBeenCalled()
+            expect(route.updateCountryFromPoints).not.toHaveBeenCalled()
         })
 
         test('two requests for the same route make one getRouteDetails() call',async ()=>{

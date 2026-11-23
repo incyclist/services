@@ -39,3 +39,6 @@ export const DESCRIPTOR_BUSY_RETRY_MS = 2000
  * that fills the volume completely would take the rest of the app down with it.
  */
 export const COPY_STORAGE_MARGIN_BYTES = 500 * 1024 * 1024
+
+/** A list fetch does not repeat a descriptor load that ended `busy`, `timeout` or `404` for this long. */
+export const DESCRIPTOR_NEGATIVE_CACHE_MS = 60_000

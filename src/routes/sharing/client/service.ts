@@ -10,7 +10,7 @@ import { RouteApiDetail } from '../../base/api/types'
 import { useRouteList } from '../../list/service'
 import type { CatalogDocument, CatalogEntry, SharedRouteEntry, SharedRouteSummary } from '../types'
 import {
-    CATALOG_CHANGED_MESSAGE, CATALOG_TIMEOUT_MS, DESCRIPTOR_BUSY_RETRY_MS, DESCRIPTOR_DOWNLOAD_TIMEOUT_MS, DESCRIPTOR_REQUEST_TIMEOUT_MS,
+    CATALOG_CHANGED_MESSAGE, CATALOG_TIMEOUT_MS, DESCRIPTOR_BUSY_RETRY_MS, DESCRIPTOR_DOWNLOAD_TIMEOUT_MS, DESCRIPTOR_NEGATIVE_CACHE_MS, DESCRIPTOR_REQUEST_TIMEOUT_MS,
     HANDLE_PATTERN, ROUTE_HASH_PATTERN, SYNC_TIMEOUT_MS, UNREACHABLE_TTL_MS,
 } from './consts'
 import { DescriptorLoadError, getDescriptorDocument, parseDescriptor } from './descriptor'
@@ -125,6 +125,12 @@ export class RouteSharingClientService extends IncyclistService {
     protected catalogs = new Map<string, CatalogEntry[]>()
     protected syncStates = new Map<string, LinkSyncState>()
     protected descriptorLoads = new Map<string, Promise<Route>>()
+    /** the tail of the queue of descriptor requests of each computer (one at a time per computer) */
+    protected descriptorLoadTriggers = new WeakMap<Promise<Route>, DescriptorTrigger>()
+    protected descriptorSlots = new Map<string, Promise<void>>()
+    /** failures of descriptor loads that are not repeated by list fetches for a while, keyed `${linkId}:${routeKey}` */
+    protected descriptorFailures = new Map<string, { failure: DescriptorLoadError, until: number }>()
+    protected suppressedDescriptorLoads = 0
     protected materializer = new SharedRouteMaterializer({
         getList: () => this.getRouteList(),
         getRowsForRoute: routeKey => this.getRowsForRoute(routeKey),
@@ -297,7 +303,11 @@ export class RouteSharingClientService extends IncyclistService {
                     .catch(() => route)
                     .finally(() => { this.descriptorLoads.delete(routeKey) })
                 this.descriptorLoads.set(routeKey, load)
+                this.descriptorLoadTriggers.set(load, trigger)
             }
+            // a load that was started by a list row may have been skipped by the negative cache: whoever needs the route asks again
+            else if (trigger !== 'list' && this.descriptorLoadTriggers.get(load) === 'list')
+                return load.then(res => res.details ? res : this.loadDescriptor(route, trigger))
             return load
         }
         catch (err) {
@@ -311,6 +321,9 @@ export class RouteSharingClientService extends IncyclistService {
             this.catalogs.clear()
             this.syncStates.clear()
             this.descriptorLoads.clear()
+            this.descriptorSlots.clear()
+            this.descriptorFailures.clear()
+            this.suppressedDescriptorLoads = 0
             const unsubscribers = this.unsubscribers
             this.unsubscribers = []
             unsubscribers.forEach(u => this.unsubscribeSafely(u))
@@ -365,6 +378,8 @@ export class RouteSharingClientService extends IncyclistService {
             this.unreachableAt.delete(e.linkId)
             for (const key of [...this.staleResynced].filter(k => k.startsWith(`${e.linkId}:`)))
                 this.staleResynced.delete(key)
+            for (const key of [...this.descriptorFailures.keys()].filter(k => k.startsWith(`${e.linkId}:`)))
+                this.descriptorFailures.delete(key)
             this.syncLink(e.linkId).catch(err => this.logError(err, 'session'))
         }
         catch (err) {
@@ -561,7 +576,7 @@ export class RouteSharingClientService extends IncyclistService {
         const routeKey = route.description.id!
         const startedAt = Date.now()
         try {
-            const doc = await this.fetchDescriptor(routeKey)
+            const doc = await this.fetchDescriptor(routeKey, trigger)
             const descriptor = parseDescriptor(doc.body, doc.sha256, routeKey)
             const details = { ...descriptor.details, id: routeKey, routeHash: routeKey } as unknown as RouteApiDetail
             if (descriptor.description.segments)
@@ -569,14 +584,14 @@ export class RouteSharingClientService extends IncyclistService {
             addDetails(route, details)
             await this.getRouteList().saveRoute(route, true)
             this.getRouteList().findCard(route)?.card?.emitUpdate()
-            this.logEvent({ message: 'route descriptor loaded', bytes: Buffer.byteLength(doc.body), durationMs: Date.now() - startedAt, trigger })
+            this.logEvent({ message: 'route descriptor loaded', trigger, durationMs: Date.now() - startedAt, bytes: Buffer.byteLength(doc.body), result: 'loaded' })
             return route
         }
         catch (err) {
             const failure = err instanceof DescriptorLoadError ? err : new DescriptorLoadError('unreachable')
             if (!(err instanceof DescriptorLoadError))
                 this.logError(err as Error, 'loadDescriptor')
-            this.logEvent({ message: 'route descriptor failed', reason: failure.reason, httpStatus: failure.httpStatus })
+            this.logEvent({ message: 'route descriptor failed', reason: failure.reason, httpStatus: failure.httpStatus, trigger, durationMs: Date.now() - startedAt, bytes: 0, result: failure.reason })
             throw failure
         }
     }
@@ -593,21 +608,66 @@ export class RouteSharingClientService extends IncyclistService {
     }
 
     /** Asks the candidates one after the other; the first computer that hands out a document wins. */
-    protected async fetchDescriptor(routeKey: string): Promise<{ body: string, sha256: string }> {
+    protected async fetchDescriptor(routeKey: string, trigger: DescriptorTrigger = 'details'): Promise<{ body: string, sha256: string }> {
         let failure = new DescriptorLoadError('unreachable')
         for (const linkId of this.getDescriptorCandidates(routeKey)) {
             try {
-                return await this.fetchFrom(linkId, routeKey)
+                // a list fetch does not repeat what just failed; the user asking for the route always tries
+                const known = trigger === 'list' ? this.getKnownFailure(linkId, routeKey) : undefined
+                if (known) {
+                    failure = known
+                    continue
+                }
+                // the computer answers one descriptor request at a time: the others wait here, first come first served
+                const doc = await this.withDescriptorSlot(linkId, () => this.fetchFrom(linkId, routeKey))
+                this.descriptorFailures.delete(`${linkId}:${routeKey}`)
+                return doc
             }
             catch (err) {
                 if (!(err instanceof DescriptorLoadError))
                     throw err
                 failure = err
+                this.rememberFailure(linkId, routeKey, err)
                 if (err.reason === 'unknown-route')
                     await this.onStaleHandle(linkId, routeKey)
             }
         }
         throw failure
+    }
+
+    /** Runs `fn` when all earlier calls for the same computer are done; the slot is always released. */
+    protected async withDescriptorSlot<T>(linkId: string, fn: () => Promise<T>): Promise<T> {
+        const previous = this.descriptorSlots.get(linkId) ?? Promise.resolve()
+        const run = previous.then(fn)
+        const tail = run.then(() => undefined, () => undefined)
+        this.descriptorSlots.set(linkId, tail)
+        try {
+            return await run
+        }
+        finally {
+            void tail.then(() => { if (this.descriptorSlots.get(linkId) === tail) this.descriptorSlots.delete(linkId) })
+        }
+    }
+
+    /** The failure that a list fetch must not repeat yet, if there is one. */
+    protected getKnownFailure(linkId: string, routeKey: string): DescriptorLoadError | undefined {
+        const key = `${linkId}:${routeKey}`
+        const known = this.descriptorFailures.get(key)
+        if (!known)
+            return undefined
+        if (known.until <= Date.now()) {
+            this.descriptorFailures.delete(key)
+            return undefined
+        }
+        this.suppressedDescriptorLoads++
+        this.logEvent({ message: 'route descriptor load suppressed', reason: 'negative-cache', routeFailure: known.failure.reason, suppressed: this.suppressedDescriptorLoads })
+        return known.failure
+    }
+
+    protected rememberFailure(linkId: string, routeKey: string, failure: DescriptorLoadError): void {
+        const transient = failure.reason === 'busy' || failure.reason === 'timeout' || (failure.reason === 'http' && failure.httpStatus === 404)
+        if (transient)
+            this.descriptorFailures.set(`${linkId}:${routeKey}`, { failure, until: Date.now() + DESCRIPTOR_NEGATIVE_CACHE_MS })
     }
 
     protected async fetchFrom(linkId: string, routeKey: string): Promise<{ body: string, sha256: string }> {

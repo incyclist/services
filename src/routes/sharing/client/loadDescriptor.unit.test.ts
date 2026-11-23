@@ -221,6 +221,124 @@ describe('RouteSharingClientService.loadDescriptor', () => {
         }
     })
 
+    describe('one request at a time per computer', () => {
+        const route2 = () => {
+            const key = getRouteHash({ id: 'y', title: 'T2', points: [...POINTS!].reverse() })
+            const r = new Route({ id: key, routeHash: key, title: 'T2', isLocal: true, hasVideo: true, linkShared: true })
+            rows.push({ linkId: 'A', routeKey: key })
+            return { r, key }
+        }
+
+        test('later requests wait for the one in flight and run first come first served', async () => {
+            const { r: r2, key: k2 } = route2()
+            const { r: r3, key: k3 } = route2()
+            const order: string[] = []
+            let inFlight = 0
+            let maxInFlight = 0
+            request.mockImplementation(async (_l: string, _t: string, body: { routeKey: string }) => {
+                inFlight++
+                maxInFlight = Math.max(maxInFlight, inFlight)
+                order.push(body.routeKey)
+                await new Promise(resolve => setTimeout(resolve, 5))
+                inFlight--
+                return { t: 'route-descriptor', b: { error: 'unknown-route' } }
+            })
+            await Promise.all([service.loadDescriptor(route, 'list'), service.loadDescriptor(r2, 'list'), service.loadDescriptor(r3, 'list')])
+            expect(maxInFlight).toBe(1)
+            expect(order).toEqual([routeKey, k2, k3])
+        })
+
+        test('a failing request releases the slot', async () => {
+            const { r: r2 } = route2()
+            request.mockRejectedValueOnce(new Error('boom'))
+            await service.loadDescriptor(route, 'list')
+            await service.loadDescriptor(r2, 'list')
+            expect(request).toHaveBeenCalledTimes(2)
+        })
+    })
+
+    describe('negative cache', () => {
+        const busyTwice = () => request.mockImplementation(async () => ({ t: 'route-descriptor', b: { routeKey, error: 'busy' } }))
+
+        test('a list fetch does not repeat a busy answer', async () => {
+            jest.useFakeTimers()
+            try {
+                busyTwice()
+                const first = service.loadDescriptor(route, 'list')
+                await jest.advanceTimersByTimeAsync(2100)
+                await first
+                expect(request).toHaveBeenCalledTimes(2)
+
+                await service.loadDescriptor(route, 'list')
+                expect(request).toHaveBeenCalledTimes(2)
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        test.each(['ride', 'copy', 'details'] as const)('%s bypasses a cached failure', async trigger => {
+            jest.useFakeTimers()
+            try {
+                busyTwice()
+                const first = service.loadDescriptor(route, 'list')
+                await jest.advanceTimersByTimeAsync(2100)
+                await first
+                request.mockImplementation(async () => ({ t: 'route-descriptor', b: reply }))
+                const res = await service.loadDescriptor(route, trigger)
+                expect(res.details).toBeDefined()
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        test('404 on the download is cached for list fetches; the entry expires after 60 s', async () => {
+            jest.useFakeTimers()
+            try {
+                fetchMock.mockResolvedValueOnce({ ok: false, status: 404, text: async () => '' })
+                await service.loadDescriptor(route, 'list')
+                expect(request).toHaveBeenCalledTimes(1)
+                await service.loadDescriptor(route, 'list')
+                expect(request).toHaveBeenCalledTimes(1)
+
+                jest.setSystemTime(Date.now() + 61_000)
+                await service.loadDescriptor(route, 'list')
+                expect(request).toHaveBeenCalledTimes(2)
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        test('a new session of the computer clears it', async () => {
+            fetchMock.mockResolvedValueOnce({ ok: false, status: 404, text: async () => '' })
+            await service.loadDescriptor(route, 'list')
+            const internals = service as unknown as { syncLink: unknown, onSessionChanged: (e: unknown) => void }
+            internals.syncLink = jest.fn(async () => undefined)
+            internals.onSessionChanged({ linkId: 'A', session: { linkId: 'A', capabilities: [] } })
+            await service.loadDescriptor(route, 'list')
+            expect(request).toHaveBeenCalledTimes(2)
+        })
+
+        test('a failure that is not busy, timeout or 404 is not cached', async () => {
+            request.mockResolvedValueOnce({ t: 'route-descriptor', b: { routeKey, error: 'unknown-route' } })
+            await service.loadDescriptor(route, 'list')
+            await service.loadDescriptor(route, 'list')
+            expect(request).toHaveBeenCalledTimes(2)
+        })
+
+        test('the suppressed fetch and the load are logged', async () => {
+            const logEvent = jest.spyOn(service as unknown as { logEvent: (e: unknown) => void }, 'logEvent')
+            fetchMock.mockResolvedValueOnce({ ok: false, status: 404, text: async () => '' })
+            await service.loadDescriptor(route, 'list')
+            await service.loadDescriptor(route, 'list')
+            const events = logEvent.mock.calls.map(c => c[0] as Record<string, unknown>)
+            expect(events).toContainEqual(expect.objectContaining({ message: 'route descriptor failed', trigger: 'list', result: 'http', durationMs: expect.any(Number) }))
+            expect(events).toContainEqual(expect.objectContaining({ message: 'route descriptor load suppressed', suppressed: 1 }))
+        })
+    })
+
     test('digest mismatch persists nothing', async () => {
         reply.sha256 = sha256('something else')
         expect((await failure(service.loadDescriptor(route, 'details')))?.reason).toBe('hash-mismatch')
