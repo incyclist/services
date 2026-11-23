@@ -56,8 +56,14 @@ const requireNonce = (value: string): Buffer => {
     return bytes
 }
 
-const kidBytes = (secret: Buffer, nc: Buffer): Buffer =>
-    hmacSha256(secret, LABEL_KID, nc).subarray(0, LINK_KID_BYTES)
+// the truncated copy is built element-wise: subarray()/slice() of a Buffer is not a Buffer on Hermes
+const kidBytes = (secret: Buffer, nc: Buffer): Buffer => {
+    const mac = hmacSha256(secret, LABEL_KID, nc)
+    const kid = Buffer.alloc(LINK_KID_BYTES)
+    for (let i = 0; i < LINK_KID_BYTES; i++)
+        kid[i] = mac[i]
+    return kid
+}
 
 const serverProofBytes = (secret: Buffer, nc: Buffer, ns: Buffer, linkId: string): Buffer =>
     hmacSha256(secret, LABEL_SERVER_PROOF, nc, ns, Buffer.from(linkId, 'utf8'))

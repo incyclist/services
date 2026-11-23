@@ -4,7 +4,28 @@ import {
 } from './consts'
 import type { LinkFrameEvent, LinkFrameReaderOptions, LinkFramingErrorCode } from './types'
 
-const PREAMBLE_MAGIC_BYTES = Buffer.from(LINK_PREAMBLE_MAGIC, 'ascii')
+// Only plain Uint8Array operations are used on byte state: on React Native (Hermes) the results of
+// Buffer#subarray()/slice() are not Buffers, so Buffer methods must never be called on derived buffers.
+const PREAMBLE_MAGIC_BYTES: Uint8Array = Uint8Array.from(Buffer.from(LINK_PREAMBLE_MAGIC, 'ascii'))
+
+const EMPTY = new Uint8Array(0)
+
+const concatBytes = (a: Uint8Array, b: Uint8Array): Uint8Array => {
+    const out = new Uint8Array(a.length + b.length)
+    out.set(a, 0)
+    out.set(b, a.length)
+    return out
+}
+
+const readUInt32BE = (bytes: Uint8Array, offset: number): number =>
+    ((bytes[offset] * 0x1000000) + ((bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3])) >>> 0
+
+const writeUInt32BE = (bytes: Uint8Array, value: number, offset: number): void => {
+    bytes[offset] = (value >>> 24) & 0xff
+    bytes[offset + 1] = (value >>> 16) & 0xff
+    bytes[offset + 2] = (value >>> 8) & 0xff
+    bytes[offset + 3] = value & 0xff
+}
 
 const clampFrameBytes = (maxFrameBytes?: number): number => {
     const requested = maxFrameBytes ?? LINK_DEFAULT_MAX_FRAME_BYTES
@@ -20,8 +41,8 @@ const clampFrameBytes = (maxFrameBytes?: number): number => {
  */
 export const encodeLinkPreamble = (version: number = LINK_FRAMING_VERSION): Buffer => {
     const preamble = Buffer.alloc(LINK_PREAMBLE_LENGTH)
-    PREAMBLE_MAGIC_BYTES.copy(preamble, 0)
-    preamble.writeUInt8(version, PREAMBLE_MAGIC_BYTES.length)
+    preamble.set(PREAMBLE_MAGIC_BYTES, 0)
+    preamble[PREAMBLE_MAGIC_BYTES.length] = version & 0xff
     return preamble
 }
 
@@ -37,7 +58,7 @@ export const encodeLinkFrame = (payload: string | Uint8Array, maxFrameBytes?: nu
     if (body.length > clampFrameBytes(maxFrameBytes))
         throw new Error(`local-link: frame of ${body.length} bytes exceeds the frame size limit`)
     const header = Buffer.alloc(LINK_FRAME_HEADER_LENGTH)
-    header.writeUInt32BE(body.length, 0)
+    writeUInt32BE(header, body.length, 0)
     return Buffer.concat([header, body])
 }
 
@@ -52,7 +73,7 @@ export const encodeLinkFrame = (payload: string | Uint8Array, maxFrameBytes?: nu
  * caller must close the connection.
  */
 export class LinkFrameReader {
-    protected buffer: Buffer = Buffer.alloc(0)
+    protected buffer: Uint8Array = EMPTY
     protected preamblePending: boolean
     protected readonly maxPreambleVersion: number
     protected readonly maxFrameBytes: number
@@ -74,7 +95,7 @@ export class LinkFrameReader {
     push(chunk: Uint8Array): LinkFrameEvent[] {
         if (this.failed)
             return []
-        this.buffer = this.buffer.length === 0 ? Buffer.from(chunk) : Buffer.concat([this.buffer, chunk])
+        this.buffer = this.buffer.length === 0 ? Uint8Array.from(chunk) : concatBytes(this.buffer, chunk)
 
         const events: LinkFrameEvent[] = []
         let event = this.next()
@@ -99,16 +120,18 @@ export class LinkFrameReader {
     protected readPreamble(): LinkFrameEvent | undefined {
         // a wrong magic is rejected as soon as the bytes received so far differ from it
         const available = Math.min(this.buffer.length, PREAMBLE_MAGIC_BYTES.length)
-        if (!this.buffer.subarray(0, available).equals(PREAMBLE_MAGIC_BYTES.subarray(0, available)))
-            return this.fail('bad-preamble')
+        for (let i = 0; i < available; i++) {
+            if (this.buffer[i] !== PREAMBLE_MAGIC_BYTES[i])
+                return this.fail('bad-preamble')
+        }
         if (this.buffer.length < LINK_PREAMBLE_LENGTH)
             return undefined
 
-        const version = this.buffer.readUInt8(PREAMBLE_MAGIC_BYTES.length)
+        const version = this.buffer[PREAMBLE_MAGIC_BYTES.length]
         if (version < 1 || version > this.maxPreambleVersion)
             return this.fail('unsupported-framing')
 
-        this.buffer = this.buffer.subarray(LINK_PREAMBLE_LENGTH)
+        this.buffer = Uint8Array.from(this.buffer.subarray(LINK_PREAMBLE_LENGTH))
         this.preamblePending = false
         return { type: 'preamble', version }
     }
@@ -116,7 +139,7 @@ export class LinkFrameReader {
     protected readFrame(): LinkFrameEvent | undefined {
         if (this.buffer.length < LINK_FRAME_HEADER_LENGTH)
             return undefined
-        const length = this.buffer.readUInt32BE(0)
+        const length = readUInt32BE(this.buffer, 0)
         if (length > this.maxFrameBytes)
             return this.fail('frame-too-large')
 
@@ -124,14 +147,14 @@ export class LinkFrameReader {
         if (this.buffer.length < end)
             return undefined
 
-        const payload = this.buffer.toString('utf8', LINK_FRAME_HEADER_LENGTH, end)
-        this.buffer = this.buffer.subarray(end)
+        const payload = Buffer.from(Uint8Array.from(this.buffer.subarray(LINK_FRAME_HEADER_LENGTH, end))).toString('utf8')
+        this.buffer = Uint8Array.from(this.buffer.subarray(end))
         return { type: 'frame', payload }
     }
 
     protected fail(code: LinkFramingErrorCode): LinkFrameEvent {
         this.failed = true
-        this.buffer = Buffer.alloc(0)
+        this.buffer = EMPTY
         return { type: 'error', code }
     }
 }

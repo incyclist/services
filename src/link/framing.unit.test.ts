@@ -1,4 +1,5 @@
 import { LINK_MAX_FRAME_BYTES_CEILING } from './consts'
+import { simulateHermesBuffer } from '../../__tests__/utils/hermesBuffer'
 import { LinkFrameReader, encodeLinkFrame, encodeLinkPreamble } from './framing'
 
 const frame = (payload: string) => encodeLinkFrame(payload)
@@ -124,5 +125,52 @@ describe('link framing', () => {
                 expect(reader.push(encodeLinkPreamble(1))).toEqual([{ type: 'preamble', version: 1 }])
             })
         })
+    })
+})
+
+describe('link framing on Hermes (Buffer#subarray/slice return a plain Uint8Array)', () => {
+    let restore: () => void
+    beforeEach(() => { restore = simulateHermesBuffer() })
+    afterEach(() => restore())
+
+    test('the simulation really strips Buffer methods from derived buffers', () => {
+        const derived = Buffer.from([1, 2, 3]).subarray(1) as unknown as { equals?: unknown, readUInt8?: unknown }
+        expect(derived.equals).toBeUndefined()
+        expect(derived.readUInt8).toBeUndefined()
+    })
+
+    test('reads preamble and frames, also when split byte by byte', () => {
+        const stream = Buffer.concat([encodeLinkPreamble(), frame('{"a":1}'), frame('é')])
+        const reader = new LinkFrameReader({ preamble: { maxVersion: 1 } })
+        const events = []
+        for (const byte of stream)
+            events.push(...reader.push(Uint8Array.of(byte)))
+        expect(events).toEqual([
+            { type: 'preamble', version: 1 },
+            { type: 'frame', payload: '{"a":1}' },
+            { type: 'frame', payload: 'é' },
+        ])
+    })
+
+    test('reads several frames from one chunk and keeps a partial rest', () => {
+        const reader = new LinkFrameReader({ preamble: { maxVersion: 1 } })
+        const stream = Buffer.concat([encodeLinkPreamble(), frame('one'), frame('two'), frame('three').subarray(0, 5) as Buffer])
+        expect(reader.push(stream).map(e => e.type)).toEqual(['preamble', 'frame', 'frame'])
+        expect(reader.push(Buffer.from(frame('three')).subarray(5) as Buffer)).toEqual([{ type: 'frame', payload: 'three' }])
+    })
+
+    test('reports a wrong magic and an unsupported version', () => {
+        expect(new LinkFrameReader({ preamble: { maxVersion: 1 } }).push(Buffer.from('XNCY'))).toEqual([{ type: 'error', code: 'bad-preamble' }])
+        expect(new LinkFrameReader({ preamble: { maxVersion: 1 } }).push(encodeLinkPreamble(9))).toEqual([{ type: 'error', code: 'unsupported-framing' }])
+    })
+
+    test('reports a frame above the limit', () => {
+        const reader = new LinkFrameReader({ maxFrameBytes: 4 })
+        expect(reader.push(Uint8Array.of(0, 0, 0, 9))).toEqual([{ type: 'error', code: 'frame-too-large' }])
+    })
+
+    test('reads lengths above 2^31', () => {
+        const reader = new LinkFrameReader()
+        expect(reader.push(Uint8Array.of(0xff, 0xff, 0xff, 0xff))).toEqual([{ type: 'error', code: 'frame-too-large' }])
     })
 })

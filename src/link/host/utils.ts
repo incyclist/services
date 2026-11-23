@@ -47,7 +47,8 @@ export const randomInt = (max: number): number => {
     const range = 0x100000000
     const limit = range - (range % max)
     for (;;) {
-        const value = randomBytes(4).readUInt32BE(0)
+        const bytes = randomBytes(4)
+        const value = ((bytes[0] * 0x1000000) + ((bytes[1] << 16) | (bytes[2] << 8) | bytes[3])) >>> 0
         if (value < limit)
             return value % max
     }
