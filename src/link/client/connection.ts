@@ -37,7 +37,7 @@ interface OutstandingRequest {
     timer: ReturnType<typeof setTimeout>
 }
 
-const REJECTIONS_TO_IGNORE: LinkRejectReason[] = ['unknown-type']
+const REJECTIONS_TO_IGNORE = new Set<LinkRejectReason>(['unknown-type'])
 
 /**
  * The phone's end of one control connection: a socket, the framing and the message channel.
@@ -117,7 +117,7 @@ export class LinkClientConnection extends EventEmitter {
      *
      * @throws LinkConnectionError when the connection is closed
      */
-    send<K extends keyof LinkClientMessageBodies & string>(t: K, b: LinkClientMessageBodies[K], id?: string): void {
+    send<K extends keyof LinkClientMessageBodies>(t: K, b: LinkClientMessageBodies[K], id?: string): void {
         if (this.closed)
             throw this.failure ?? new LinkConnectionError('closed')
         this.write(encodeLinkFrame(this.channel.encode(t, b, id), MAX_FRAME_BYTES))
@@ -144,7 +144,7 @@ export class LinkClientConnection extends EventEmitter {
      *
      * @throws LinkConnectionError `timeout` if no reply arrives in time, `closed` (or the failure) if the connection ends
      */
-    request<K extends keyof LinkClientMessageBodies & string>(t: K, b: LinkClientMessageBodies[K], timeoutMs: number): Promise<Extract<LinkServerMessage, { t: K }>> {
+    request<K extends keyof LinkClientMessageBodies>(t: K, b: LinkClientMessageBodies[K], timeoutMs: number): Promise<Extract<LinkServerMessage, { t: K }>> {
         return new Promise((resolve, reject) => {
             const id = Buffer.from(getLinkCrypto().randomBytes(8)).toString('hex')
             const timer = setTimeout(() => {
@@ -286,7 +286,7 @@ export class LinkClientConnection extends EventEmitter {
     protected onFrame(payload: string): boolean {
         const res = this.channel.decode(payload)
         if (res.ok === false) {
-            if (REJECTIONS_TO_IGNORE.includes(res.reason))
+            if (REJECTIONS_TO_IGNORE.has(res.reason))
                 return true
             this.end(new LinkConnectionError('protocol', res.reason))
             return false
@@ -321,7 +321,7 @@ export class LinkClientConnection extends EventEmitter {
     /** @returns true if the message is the reply of an outstanding request */
     protected resolveRequest(msg: LinkServerMessage): boolean {
         const request = msg.id === undefined ? undefined : this.requests.get(msg.id)
-        if (!request || request.type !== msg.t)
+        if (request?.type !== msg.t)
             return false
         this.requests.delete(msg.id!)
         clearTimeout(request.timer)

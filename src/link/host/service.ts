@@ -28,7 +28,7 @@ import {
     validateDisplayName,
 } from './utils'
 
-type ServerMessageType = keyof LinkServerMessageBodies & string
+type ServerMessageType = keyof LinkServerMessageBodies
 type PortSettings = { control?: number, media?: number }
 
 const PLATFORMS: Record<string, LocalLinkPlatform> = { win32: 'windows', darwin: 'macos', linux: 'linux' }
@@ -398,7 +398,7 @@ export class LocalLinkService extends IncyclistService {
             if (!this.running || !catalogVersion || catalogVersion === this.pushedCatalogVersion)
                 return
             this.pushedCatalogVersion = catalogVersion
-            for (const conn of [...this.connections.values()]) {
+            for (const conn of this.connections.values()) {
                 if (!conn.clientId)
                     continue
                 this.send(conn, 'catalog-changed', { catalogVersion })
@@ -793,7 +793,7 @@ export class LocalLinkService extends IncyclistService {
     protected async closeConnectionsOf(clientId: string, reason: string): Promise<void> {
         const ids = [...this.connections.values()].filter(c => c.clientId === clientId).map(c => c.id)
         for (const id of ids)
-            await this.closeConnection(id, reason)
+            await this.closeConnection(id, reason) // NOSONAR sequential: connections are closed one at a time
     }
 
     // --- records ---

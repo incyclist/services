@@ -532,13 +532,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
             canStart = canStart && (descr?.isLocal || (!descr.requiresDownload ||descr?.isDownloaded) || this.hasLinkSource(descr))
 
         }
-        else {
-            if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) && !descr.linkShared ) {            
-                canStart = false            
-                videoChecking = true
-                videoMissing = this.isVideoMissing()
-            }
-
+        else if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) && !descr.linkShared ) {
+            canStart = false
+            videoChecking = true
+            videoMissing = this.isVideoMissing()
         }
         
 

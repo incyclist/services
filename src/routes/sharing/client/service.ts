@@ -496,7 +496,7 @@ export class RouteSharingClientService extends IncyclistService {
     /** Materialises the catalogs that arrived before the route list was loaded. */
     protected async materializeCached(): Promise<void> {
         for (const entries of [...this.catalogs.values()])
-            await this.materializer.materialize(entries)
+            await this.materializer.materialize(entries) // NOSONAR sequential: catalogs are materialized one at a time
     }
 
     /**
@@ -711,7 +711,7 @@ export class RouteSharingClientService extends IncyclistService {
                     continue
                 }
                 // the computer answers one descriptor request at a time: the others wait here, first come first served
-                const doc = await this.withDescriptorSlot(linkId, () => this.fetchFrom(linkId, routeKey))
+                const doc = await this.withDescriptorSlot(linkId, () => this.fetchFrom(linkId, routeKey)) // NOSONAR sequential: the next computer is asked only if the previous one failed
                 this.descriptorFailures.delete(`${linkId}:${routeKey}`)
                 return doc
             }

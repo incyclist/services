@@ -392,7 +392,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             const service = this.getRouteList()
             const card = service.getCard(id)
             // a route that exists only because a computer shares it offers no delete (without a local copy)
-            if (card && card.canDelete()) {
+            if (card?.canDelete()) {
                 card.delete()
             }
         }

@@ -156,7 +156,7 @@ export class RouteSharingService extends IncyclistService {
         let name: string | undefined
         try {
             const entry = typeof routeKey === 'string' ? this.catalog?.document.routes.find(r => r.routeKey === routeKey) : undefined
-            if (!entry || entry.origin !== 'local' || !entry.routeHash)
+            if (entry?.origin !== 'local' || !entry.routeHash)
                 return this.descriptorFailed(routeKey, 'unknown-route')
 
             const route = await this.loadRouteWithDetails(entry.routeIdOnComputer)
@@ -303,7 +303,7 @@ export class RouteSharingService extends IncyclistService {
     protected async runRefresh(): Promise<void> {
         do {
             this.refreshAgain = false
-            await this.rebuild()
+            await this.rebuild() // NOSONAR sequential: a rebuild runs after the previous one, repeated while changes arrive
         } while (this.refreshAgain && this.started)
     }
 

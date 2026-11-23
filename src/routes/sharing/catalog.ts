@@ -148,7 +148,7 @@ export const buildCatalog = async (descriptions: RouteInfo[], opts: CatalogBuild
     const built: BuiltEntry[] = []
     for (let i = 0; i < candidates.length; i += STAT_CONCURRENCY) {
         const chunk = candidates.slice(i, i + STAT_CONCURRENCY)
-        const entries = await Promise.all(chunk.map(c => buildEntry(c.descr, c.path, opts)))
+        const entries = await Promise.all(chunk.map(c => buildEntry(c.descr, c.path, opts))) // NOSONAR bounded concurrency: one chunk of file stats at a time
         for (const b of entries) {
             if (b)
                 built.push(b)

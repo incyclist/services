@@ -176,7 +176,7 @@ const decodeProbe = (probe: AuthBody): { nc: Buffer, kids: Buffer[] } | undefine
     if (!nc || !Array.isArray(probe.kids) || probe.kids.length === 0 || probe.kids.length > LINK_MAX_AUTH_KIDS)
         return undefined
     const kids = probe.kids.map(kid => decodeFixed(kid, LINK_KID_BYTES))
-    if (kids.some(kid => kid === undefined))
+    if (kids.includes(undefined))
         return undefined
     return { nc, kids: kids as Buffer[] }
 }

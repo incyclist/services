@@ -64,7 +64,7 @@ export class LinkStore {
         this.records.clear()
         const names = await this.repo.list() ?? []
         for (const name of names) {
-            const record = toLinkRecord(await this.repo.read(name).catch(() => undefined))
+            const record = toLinkRecord(await this.repo.read(name).catch(() => undefined)) // NOSONAR sequential: reads of the saved records one at a time
             if (record)
                 this.records.set(record.linkId, record)
         }

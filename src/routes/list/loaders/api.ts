@@ -373,6 +373,22 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         }
     }
 
+    private markAddedOrUpdated(description,existing,items) {
+        if (!existing) {
+            this.logger.logEvent({message:'route added',id:description.id,title:description.title,ts:description.tsImported})
+
+            description.tsImported = Date.now()
+            return
+        }
+
+        description.tsImported = existing.tsImported
+        // not part of the API data: written by the route sharing sync, it must survive an update of the route
+        if (existing.linkSources)
+            description.linkSources = existing.linkSources
+        items.push({route:new Route(description),added:false})
+        this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})
+    }
+
     private async processRouteFromApi(descr,items) {
         let description;
         // a placeholder that was created from a paired computer's catalog is not a route of this device: the official route replaces it
@@ -409,19 +425,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
                     
             this.processed.push(descr.id)
-            if (!existing) {
-                this.logger.logEvent({message:'route added',id:description.id,title:description.title,ts:description.tsImported})
-                
-                description.tsImported = Date.now()
-            }
-            else {
-                description.tsImported = existing.tsImported
-                // not part of the API data: written by the route sharing sync, it must survive an update of the route
-                if (existing.linkSources)
-                    description.linkSources = existing.linkSources
-                items.push({route:new Route(description),added:false})
-                this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})                
-            }
+            this.markAddedOrUpdated(description,existing,items)
         }
 
 

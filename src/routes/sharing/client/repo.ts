@@ -154,7 +154,7 @@ export class SharedRouteRepo {
     protected async readAll(): Promise<void> {
         this.rows.clear()
         for (const name of await this.repo.list() ?? []) {
-            const row = toSharedRouteEntry(await this.repo.read(name).catch(() => undefined))
+            const row = toSharedRouteEntry(await this.repo.read(name).catch(() => undefined)) // NOSONAR sequential: reads of the saved rows one at a time
             if (!row)
                 continue
             const rows = this.rows.get(row.linkId) ?? new Map<string, SharedRouteEntry>()
@@ -165,8 +165,8 @@ export class SharedRouteRepo {
 
     protected async persist(writes: SharedRouteEntry[], deletes: SharedRouteEntry[]): Promise<void> {
         for (let i = 0; i < deletes.length; i += WRITE_BATCH)
-            await Promise.all(deletes.slice(i, i + WRITE_BATCH).map(r => this.repo.delete(toRowKey(r.linkId, r.routeKey)).catch(() => false)))
+            await Promise.all(deletes.slice(i, i + WRITE_BATCH).map(r => this.repo.delete(toRowKey(r.linkId, r.routeKey)).catch(() => false))) // NOSONAR bounded concurrency: one batch of DB writes at a time
         for (let i = 0; i < writes.length; i += WRITE_BATCH)
-            await Promise.all(writes.slice(i, i + WRITE_BATCH).map(r => this.repo.write(toRowKey(r.linkId, r.routeKey), { ...r } as unknown as JSONObject).catch(() => false)))
+            await Promise.all(writes.slice(i, i + WRITE_BATCH).map(r => this.repo.write(toRowKey(r.linkId, r.routeKey), { ...r } as unknown as JSONObject).catch(() => false))) // NOSONAR bounded concurrency: one batch of DB writes at a time
     }
 }

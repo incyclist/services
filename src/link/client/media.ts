@@ -58,7 +58,7 @@ export class LinkMediaPath {
     async release(linkId?: string): Promise<void> {
         const ids = linkId === undefined ? [...this.pipes.keys()] : [linkId]
         for (const id of ids)
-            await this.stopPipe(id)
+            await this.stopPipe(id) // NOSONAR sequential: pipes are torn down one at a time
     }
 
     protected hasPipe(): boolean {

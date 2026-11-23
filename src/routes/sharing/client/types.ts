@@ -1,5 +1,4 @@
 import type { LinkReachability } from '../../../link/client/types'
-import type { SharedRouteEntry } from '../types'
 
 /** Outcome of the catalog sync of one computer. */
 export type SyncStatus =

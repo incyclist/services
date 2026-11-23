@@ -89,7 +89,7 @@ export class SharedRouteMaterializer {
         let removed = 0
         for (const route of orphans) {
             try {
-                if (await list.removeSharedRoute(route) !== false)
+                if (await list.removeSharedRoute(route) !== false) // NOSONAR sequential: the route list is changed one route at a time
                     removed++
             }
             catch (err) {
@@ -155,7 +155,7 @@ export class SharedRouteMaterializer {
         let removed = 0
         for (const route of superseded) {
             try {
-                if (await list.removeSharedRoute(route) !== false)
+                if (await list.removeSharedRoute(route) !== false) // NOSONAR sequential: the route list is changed one route at a time
                     removed++
             }
             catch (err) {
@@ -168,7 +168,7 @@ export class SharedRouteMaterializer {
     protected async save(list: MaterializerRouteList, routes: Route[]): Promise<void> {
         for (const route of routes) {
             try {
-                await list.saveRoute(route)
+                await list.saveRoute(route) // NOSONAR sequential: DB writes one route at a time
             }
             catch (err) {
                 this.deps.logError(err as Error, 'save')

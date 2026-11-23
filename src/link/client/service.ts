@@ -27,7 +27,7 @@ import type {
 } from './types'
 import { LinkWatch } from './watch'
 
-const BUSY_RIDE_STATES: CurrentRideState[] = ['Starting', 'Started', 'Active', 'Paused', 'Closing']
+const BUSY_RIDE_STATES = new Set<CurrentRideState>(['Starting', 'Started', 'Active', 'Paused', 'Closing'])
 const EXCLUSIVE_OWNER = 'local-link'
 /** native capability: control connection and discovery are available in the installed native app */
 const NATIVE_FEATURE_LOCAL_LINK = 'local-link'
@@ -467,7 +467,7 @@ export class LocalLinkClientService extends IncyclistService {
      * @returns the reply, or `undefined` if there is no open session, the computer did not answer in
      * time or the session ended
      */
-    async request<K extends keyof LinkClientMessageBodies & string>(
+    async request<K extends keyof LinkClientMessageBodies>(
         linkId: string, t: K, b: LinkClientMessageBodies[K], timeoutMs: number,
     ): Promise<Extract<LinkServerMessage, { t: K }> | undefined> {
         try {
@@ -538,9 +538,9 @@ export class LocalLinkClientService extends IncyclistService {
             this.watchInFlight.clear()
             this.unreachableSince.clear()
             this.flushWatchStats()
-            for (const linkId of [...this.reconnects.keys()])
+            for (const linkId of this.reconnects.keys())
                 this.cancelReconnect(linkId)
-            for (const linkId of [...this.sessions.keys()])
+            for (const linkId of this.sessions.keys())
                 this.closeSession(linkId)
             this.media.release().catch(() => undefined)
             this.gate.reset()
@@ -592,7 +592,7 @@ export class LocalLinkClientService extends IncyclistService {
     protected getBusyReason(): SearchBlockedReason | undefined {
         if (this.browse)
             return 'search-running'
-        if (BUSY_RIDE_STATES.includes(this.getRideDisplay().getState()))
+        if (BUSY_RIDE_STATES.has(this.getRideDisplay().getState()))
             return 'ride'
         if (this.getDeviceAccess().isScanning())
             return 'device-scan'
@@ -780,7 +780,7 @@ export class LocalLinkClientService extends IncyclistService {
             this.checkingLinks.add(link.linkId)
             this.emitState()
             try {
-                if (!await this.connectKnown(link))
+                if (!await this.connectKnown(link)) // NOSONAR sequential: one connection attempt at a time, no burst on the network
                     failed.push(link)
             }
             finally {
@@ -809,8 +809,8 @@ export class LocalLinkClientService extends IncyclistService {
         for (const found of results) {
             if (remaining.length === 0)
                 return
-            const candidates = await this.loadCandidates(remaining)
-            const result = candidates.length > 0 ? await this.probe(found.host, found.port, candidates) : undefined
+            const candidates = await this.loadCandidates(remaining) // NOSONAR sequential: a found address is probed only with the computers still unconnected
+            const result = candidates.length > 0 ? await this.probe(found.host, found.port, candidates) : undefined // NOSONAR sequential: one handshake at a time, the result narrows the next probe
             if (result?.kind === 'session') {
                 this.adoptSession(result)
                 remaining = remaining.filter(l => l.linkId !== result.link.linkId)
@@ -860,12 +860,13 @@ export class LocalLinkClientService extends IncyclistService {
     }
 
     protected async loadCandidates(links: LinkRecord[]): Promise<LinkAuthCandidate[]> {
+        const secrets = await Promise.all(links.map(link => this.store.getSecret(link.linkId)))
         const candidates: LinkAuthCandidate[] = []
-        for (const link of links) {
-            const secret = await this.store.getSecret(link.linkId)
+        links.forEach((link, i) => {
+            const secret = secrets[i]
             if (secret && fromBase64Url(secret)?.length)
                 candidates.push({ linkId: link.linkId, secret })
-        }
+        })
         return candidates.slice(0, LINK_MAX_AUTH_KIDS)
     }
 
@@ -1056,7 +1057,7 @@ export class LocalLinkClientService extends IncyclistService {
     protected shouldWatch(): boolean {
         try {
             return this.foreground && this.isSupported() && !this.browse
-                && !BUSY_RIDE_STATES.includes(this.getRideDisplay().getState())
+                && !BUSY_RIDE_STATES.has(this.getRideDisplay().getState())
                 && this.getRetryTargets().length > 0
         }
         catch (err) {

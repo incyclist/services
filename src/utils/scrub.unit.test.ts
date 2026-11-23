@@ -36,3 +36,29 @@ describe('scrubError', () => {
         expect(scrubError(err)).toBe(err)
     })
 })
+
+describe('scrubTokens URL edge cases', () => {
+    test.each([
+        ['1http://a?x=1 z', '1http://a z'],
+        ['xhttp://a#f)b', 'xhttp://a)b'],
+        ['a://a://x y', 'a://a://x y'],
+        ['a://a://x?q=1', 'a://a://x'],
+        ['HTTP://H/p?Q=1 and ftp://x/y#z', 'HTTP://H/p and ftp://x/y'],
+        ['a-b.c+d://h?q', 'a-b.c+d://h'],
+        ['1a2b://h?q=1', '1a2b://h'],
+        ['://x?y', '://x?y'],
+        ['http://', 'http://'],
+        ['http://?a', 'http://'],
+        ['a://x"?q', 'a://x"?q'],
+    ])('%s', (input, expected) => {
+        expect(scrubTokens(input)).toBe(expected)
+    })
+
+    test('worst-case inputs are scrubbed in linear time', () => {
+        const inputs = ['a'.repeat(200000), 'a1'.repeat(100000), 'a://'.repeat(50000), `${'a://'.repeat(50000)} x`]
+        const start = Date.now()
+        for (const input of inputs)
+            expect(scrubTokens(input)).toBe(input)
+        expect(Date.now() - start).toBeLessThan(2000)
+    })
+})

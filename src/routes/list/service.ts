@@ -14,7 +14,7 @@ import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard } from "./cards/RouteCard";
 import { RouteSettings, SummaryCardDisplayProps } from "./cards/types";
-import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteListSortOrder, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
+import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteAddSource, RouteListLog, RouteListSortOrder, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -1083,7 +1083,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * @param source Whether the addition originated from a user action or the system.
      */
 
-    public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
+    public addRoute(route:Route,source:RouteAddSource='system'):void {
         try {
             if (this.addRouteToLists(route,source))
                 this.emitLists('updated',{source: source==='user' ? 'user':'system'})
@@ -1098,7 +1098,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * Adds many routes with one `updated` event. A route that is already known is refreshed in
      * place (and its card told to redraw).
      */
-    public addRoutes(routes:Array<Route>, source:'user'|'system'|'import'='system'):void {
+    public addRoutes(routes:Array<Route>, source:RouteAddSource='system'):void {
         try {
             let added = false
             routes.forEach( route => {
@@ -1189,8 +1189,26 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+    protected updateCountryIfMissing(route:Route):void {
+        if (route.description.country || !(route.points?.length>0))
+            return
+
+        this.logEvent({message:'route update required (country)',route:route.title})
+        route.updateCountryFromPoints()
+            .then( (updated)=> {
+                if (updated) {
+                    this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                    const saved = this.db.save(route,false)
+                    const cardInfo = this.findCard(route)
+                    cardInfo?.card?.emitUpdate()
+                    return saved
+                }
+            })
+            .catch( err=>{ this.logError(err,'addRoute') })
+    }
+
     /** @returns true if the lists changed and an `updated` event is due */
-    protected addRouteToLists(route:Route,source:'user'|'system'|'import'):boolean {
+    protected addRouteToLists(route:Route,source:RouteAddSource):boolean {
         // route already present
         // tombstoned routes are part of the lookup: a route of the user must never be shadowed or duplicated
         const existing = this.routes.find( r=>r.description?.id===route.description.id && (source!=='system' || !r.description?.isDeleted || !!route.description?.linkShared))
@@ -1225,20 +1243,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
             }
 
-            if (!route.description.country && route.points?.length>0) {
-                this.logEvent({message:'route update required (country)',route:route.title})
-                route.updateCountryFromPoints()
-                    .then( (updated)=> {
-                        if (updated) {
-                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
-                            const saved = this.db.save(route,false)
-                            const cardInfo = this.findCard(route)
-                            cardInfo?.card?.emitUpdate()
-                            return saved
-                        }
-                    })
-                    .catch( err=>{ this.logError(err,'addRoute') })
-            }
+            this.updateCountryIfMissing(route)
         }
 
         const list = this.selectList(route)
