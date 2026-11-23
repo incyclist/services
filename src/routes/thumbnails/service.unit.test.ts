@@ -128,7 +128,7 @@ describe('RouteThumbnailCacheService', () => {
             service['failedAt'].clear()
             expect(await service.cache(link)).toBeUndefined()
             expect(fetchMock).toHaveBeenCalledTimes(1)
-            const ev = logged.find(e => e.status === 410)
+            const ev = logged.find(e => e.httpStatus === 410)
             expect(ev).toBeDefined()
             expect(typeof ev!.durationMs).toBe('number')
             expect(JSON.stringify(logged)).not.toContain('abc')

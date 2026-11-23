@@ -206,7 +206,7 @@ export class RouteThumbnailCacheService extends IncyclistService {
         try {
             const response = await fetch(url, { headers, signal: controller.signal })
             if (response.status < 200 || response.status >= 300) {
-                this.logEvent({ message: 'thumbnail fetch failed', source, status: response.status, durationMs: Date.now() - started })
+                this.logEvent({ message: 'thumbnail fetch failed', source, httpStatus: response.status, durationMs: Date.now() - started })
                 return { gone: source === 'computer' && (response.status === 404 || response.status === 410) }
             }
             const data = Buffer.from(await response.arrayBuffer())
