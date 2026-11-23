@@ -1017,6 +1017,61 @@ describe('RoutesPageService',()=>{
             expect(changed).toMatchObject({ availability: 'fromLink' })
         })
 
+        describe('a computer comes or goes', () => {
+            const stubCard = () => {
+                let key: string | undefined
+                return {
+                    setAvailabilityProps: jest.fn((p: unknown) => { const k = JSON.stringify(p); const changed = k !== key; key = k; return changed }),
+                    emitUpdate: jest.fn(),
+                }
+            }
+
+            test('only the card of the route whose availability changed is updated, the page is not rendered again', () => {
+                const cards: Record<string, ReturnType<typeof stubCard>> = { a: stubCard(), b: stubCard(), c: stubCard() }
+                routeList.getCard.mockImplementation((id: string) => cards[id])
+                setRoutes([item('a'), item('b', { linkShared: true }), item('c', { linkShared: true })])
+                const state = { b: 'unavailable', c: 'unavailable' }
+                resolver.getRouteAvailability.mockImplementation((route: any) => route.linkShared
+                    ? { canStart: false, availability: state[route.id], unavailableReason: 'linkUnreachable', sourceLabel: 'Den PC' }
+                    : { canStart: true, availability: 'local' })
+
+                s.refreshLinkAvailability()
+                Object.values(cards).forEach(c => c.emitUpdate.mockClear())
+
+                // nothing changed: nobody is told
+                s.onLinkStateChanged()
+                Object.values(cards).forEach(c => expect(c.emitUpdate).not.toHaveBeenCalled())
+
+                // the computer that has route b comes back
+                state.b = 'fromLink'
+                s.onLinkStateChanged()
+                expect(cards.b.emitUpdate).toHaveBeenCalledTimes(1)
+                expect(cards.a.emitUpdate).not.toHaveBeenCalled()
+                expect(cards.c.emitUpdate).not.toHaveBeenCalled()
+                expect(cards.b.setAvailabilityProps).toHaveBeenLastCalledWith(expect.objectContaining({ availability: 'fromLink' }))
+                expect(s.updatePageDisplay).not.toHaveBeenCalled()
+            })
+
+            test('a card that throws does not stop the others', () => {
+                const bad = stubCard()
+                bad.setAvailabilityProps.mockImplementation(() => { throw new Error('boom') })
+                const good = stubCard()
+                routeList.getCard.mockImplementation((id: string) => id === 'x' ? bad : good)
+                setRoutes([item('x', { linkShared: true }), item('y', { linkShared: true })])
+                expect(() => s.onLinkStateChanged()).not.toThrow()
+                expect(good.emitUpdate).toHaveBeenCalledTimes(1)
+            })
+
+            test('the list props keep the card in step without telling it', () => {
+                const card2 = stubCard()
+                routeList.getCard.mockReturnValue(card2)
+                setRoutes([item('b', { linkShared: true })])
+                s.getRoutesDisplayProps()
+                expect(card2.setAvailabilityProps).toHaveBeenCalledWith(expect.objectContaining({ availability: 'unavailable' }))
+                expect(card2.emitUpdate).not.toHaveBeenCalled()
+            })
+        })
+
         test('a failure in the availability check leaves the list as it is', () => {
             const routes = [item('a')]
             setRoutes(routes)
@@ -1064,7 +1119,7 @@ describe('RoutesPageService',()=>{
                 client.emit('session-changed', { linkId: 'A', session: {} })
 
                 expect(updates).toEqual(['b'])
-                expect(s.updatePageDisplay).toHaveBeenCalled()
+                expect(s.updatePageDisplay).not.toHaveBeenCalled()
                 const props = service.getRouteDetailsProps('b')
                 expect(props).toMatchObject({ availability: 'fromLink' })
                 expect(props).not.toHaveProperty('unavailableReason')
@@ -1088,7 +1143,7 @@ describe('RoutesPageService',()=>{
             s.getPageObserver().on('route-details-update', (id: string) => updates.push(id))
             s.onLinkStateChanged()
             expect(updates).toEqual([])
-            expect(s.updatePageDisplay).toHaveBeenCalledTimes(1)
+            expect(s.updatePageDisplay).not.toHaveBeenCalled()
         })
 
         test('route details of a route that does not depend on route sharing carry none while it is not available', () => {

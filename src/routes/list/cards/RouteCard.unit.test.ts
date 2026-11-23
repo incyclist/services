@@ -564,6 +564,20 @@ describe('RouteCard preview handling', () => {
         });
     });
 
+    describe('RouteCard.setAvailabilityProps', () => {
+        test('rides along with every snapshot and reports whether it changed', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
+            const listener = jest.fn();
+            card.getDisplayProperties().observer.on('update', listener);
+
+            expect(card.setAvailabilityProps({ availability: 'fromLink', sourceLabel: 'Den PC' })).toBe(true);
+            expect(card.setAvailabilityProps({ availability: 'fromLink', sourceLabel: 'Den PC' })).toBe(false);
+            card.emitUpdate();
+
+            expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', availability: 'fromLink', sourceLabel: 'Den PC' });
+        });
+    });
+
     describe('route shape', () => {
 
         test('a resident shape is surfaced on getDisplayProperties()', () => {

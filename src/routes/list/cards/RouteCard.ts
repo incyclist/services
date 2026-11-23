@@ -78,6 +78,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
     /** iOS/iCloud list badge, cached here so it survives every emitUpdate() snapshot regardless
      *  of who triggers it - see architecture.md §3.7.1. Set only via setVideoPill(). */
     protected videoPill?: VideoListPill
+    protected availabilityProps?: Record<string, unknown>
+    protected availabilityKey?: string
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -399,7 +401,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     totalDistance,totalElevation,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver, cntActive:this.cntActive, country:countryISO,
-                    videoPill:this.videoPill, shape:this.getRouteShapeStore().get(descr.id)}
+                    videoPill:this.videoPill, ...this.availabilityProps, shape:this.getRouteShapeStore().get(descr.id)}
         }
         catch(err:any) {
             this.logError(err,'getDisplayProperties')
@@ -1326,6 +1328,23 @@ export class RouteCard extends BaseCard implements Card<Route> {
         if (this.videoPill === pill)
             return false
         this.videoPill = pill
+        return true
+    }
+
+    /**
+     * Where the route plays from (`availability`, `sourceLabel`, `unavailableReason`,
+     * `thumbnailLink`), computed by the page service for the whole list and kept as card state so
+     * that it rides along with every snapshot. A computer coming or going then reaches the route
+     * through its own observer, without the list being rendered again.
+     *
+     * Returns whether the value actually changed.
+     */
+    setAvailabilityProps(props?: Record<string, unknown>): boolean {
+        const key = props ? JSON.stringify(props) : undefined
+        if (this.availabilityKey === key)
+            return false
+        this.availabilityKey = key
+        this.availabilityProps = props
         return true
     }
 
