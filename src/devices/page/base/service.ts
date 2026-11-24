@@ -753,8 +753,16 @@ export abstract class PairingPageService extends IncyclistPageService {
             g.setDeviceListOpen(this.openedCapability!==undefined)
         }, 'openVisit')
         // whichever way the visit ends - also by app exit - its exit event carries the guidance fields
-        this.trackVisit( t=>t.setExitFields( ()=>({...this.guidance.getExitFields()}) ), 'openVisit')
+        this.trackVisit( t=>t.setExitFields( ()=>({...this.guidance.getExitFields(), inFlight:this.getInFlight()}) ), 'openVisit')
         this.isVisitOpen = true
+    }
+
+    // what the pairing service is still doing at the moment the page is left
+    protected getInFlight():'pairing'|'scanning'|'none' {
+        const activity = this.getDevicePairing().getActivity?.()
+        if (activity?.pairing)
+            return 'pairing'
+        return activity?.scanning ? 'scanning' : 'none'
     }
 
     protected closeVisit(via:PairingExitVia):void {

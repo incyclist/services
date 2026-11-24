@@ -1,7 +1,7 @@
 import { sleep } from "../../utils/sleep";
 import { useDeviceAccess } from "../access/service";
 import {AdapterInfo,  ExtendedIncyclistCapability,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
-import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties, RetryResult } from "./types";
+import { AdapterRideInfo, AdapterStateInfo, DeviceSnapshot, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties, RetryResult } from "./types";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { getLegacyInterface } from "../../utils/logging";
@@ -2069,6 +2069,53 @@ export class DeviceRideService  extends IncyclistService{
             adapters.push(info)
         }
 
+    }
+
+    /**
+     * The adapter level state of the control device and the selected sensors, as the Pairing page left it.
+     * Read only: nothing is started, stopped or cached.
+     */
+    getDeviceSnapshot():DeviceSnapshot {
+        const adapters = this.getConfiguredAdapters()
+        const control = this.getControlAdapter()
+        const stateOf = (adapter:AdapterRideInfo['adapter']):string => {
+            if (adapter.isStarted())
+                return adapter.isPaused() ? 'paused' : 'started'
+            return adapter.isStopped() ? 'stopped' : 'idle'
+        }
+
+        const sensors = adapters.filter( ai=> ai.udid!==control?.udid)
+        return {
+            controlName: control?.adapter?.getUniqueName() ?? '',
+            controlInterface: control?.adapter?.getInterface() ?? '',
+            isSimulator: control?.adapter?.getName()==='Simulator',
+            controlAdapterStarted: control?.adapter?.isStarted() ?? false,
+            controlAdapterPaused: control?.adapter?.isPaused() ?? false,
+            controlAdapterStopped: control?.adapter?.isStopped() ?? false,
+            cntSensors: sensors.length,
+            cntSensorsStarted: sensors.filter( ai=>ai.adapter.isStarted()).length,
+            sensorStates: sensors.map( ai=>`${ai.adapter.getUniqueName()}:${stateOf(ai.adapter)}`).join(';')
+        }
+    }
+
+    /**
+     * Whether the configured control device (not the simulator) has lost its connection: its adapter is
+     * not started, is stopped, or its data health has failed.
+     *
+     * @returns the state of the control device if it is disconnected, `undefined` otherwise
+     */
+    getDisconnectedControl():{name:string, started:boolean, stopped:boolean}|undefined {
+        const control = this.getControlAdapter(true)
+        if (!control?.adapter || control.adapter.getName()==='Simulator')
+            return undefined
+
+        const started = control.adapter.isStarted()
+        const stopped = control.adapter.isStopped()
+        const failed = this.rideAdapters?.find( ai=>ai.udid===control.udid)?.dataStatus==='red'
+        if (started && !stopped && !failed)
+            return undefined
+
+        return {name:control.adapter.getUniqueName(), started, stopped}
     }
 
     getControlAdapter(onlyConfigured:boolean = false):AdapterRideInfo {

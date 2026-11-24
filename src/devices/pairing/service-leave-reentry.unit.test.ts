@@ -317,4 +317,27 @@ describe('DevicePairingService: leaving and re-entering the Pairing page', () =>
             expect(env.ride.cancelStart).not.toHaveBeenCalled()
         })
     })
+
+    describe('resetReadyToStart', () => {
+
+        const info = { controlName: 'trainer', controlAdapterStarted: false, controlAdapterStopped: true }
+
+        test('withdraws the confirmation and logs it once', () => {
+            env = setup('page', configuration)
+            const log = jest.spyOn(env.pairing, 'logEvent')
+            env.pairing.setReadyToStart()
+
+            expect(env.pairing.resetReadyToStart(info)).toBe(true)
+            expect(env.pairing.isReadyToStart()).toBe(false)
+            expect(log).toHaveBeenCalledWith(expect.objectContaining({ message: 'ready to start reset', ...info }))
+        })
+
+        test('does nothing and does not log when the device was not confirmed', () => {
+            env = setup('page', configuration)
+            const log = jest.spyOn(env.pairing, 'logEvent')
+
+            expect(env.pairing.resetReadyToStart(info)).toBe(false)
+            expect(log).not.toHaveBeenCalled()
+        })
+    })
 })

@@ -162,6 +162,16 @@ export class PairingVisitTracker {
         })
     }
 
+    /**
+     * How the Pairing page was last left in this app session, `undefined` if it wasn't
+     */
+    getLastExit(): { via: PairingExitVia, ageMs: number } | undefined {
+        const last = this.deps.store.get()?.last
+        if (!last?.closed || !last.via || last.closedAt === undefined || last.sessionId !== this.deps.sessionId)
+            return undefined
+        return { via: last.via, ageMs: this.deps.now() - last.closedAt }
+    }
+
     onAppExit(canStartRide: boolean): void {
         this.closeVisit('app_exit', { canStartRide })
     }

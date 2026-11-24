@@ -16,6 +16,13 @@ describe('RideDisplayService - start overlay', () => {
     let content: StartContentInfo | undefined
     let overlayProps: Record<string, unknown>
     let logs: any[]
+    let pairingMock: any
+    let trackerMock: any
+    const snapshot = {
+        controlName: 'Trainer', controlInterface: 'ble', isSimulator: false,
+        controlAdapterStarted: true, controlAdapterPaused: false, controlAdapterStopped: false,
+        cntSensors: 2, cntSensorsStarted: 1, sensorStates: 'HRM:started;Cadence:idle',
+    }
 
     const trainer = { udid: 'T', name: 'Trainer', isControl: true, capabilities: [], isStarted: false }
     const hrm = { udid: 'H', name: 'HRM', isControl: false, capabilities: [], isStarted: false }
@@ -61,7 +68,16 @@ describe('RideDisplayService - start overlay', () => {
         Inject('ActivityRide', { getActivity: jest.fn().mockReturnValue({ id: 'a' }), stop: jest.fn().mockResolvedValue(undefined) })
         Inject('DeviceRide', devices)
         Inject('RouteList', { getSelected: jest.fn(), getStartSettings: jest.fn().mockReturnValue({}) })
-        Inject('PairingVisitTracker', { onRideStarted: jest.fn() })
+        pairingMock = {
+            getActivity: jest.fn().mockReturnValue({ stopping: false }),
+            isReadyToStart: jest.fn().mockReturnValue(false),
+            resetReadyToStart: jest.fn().mockReturnValue(true),
+        }
+        trackerMock = { onRideStarted: jest.fn(), getLastExit: jest.fn().mockReturnValue(undefined) }
+        devices.getDeviceSnapshot = jest.fn().mockReturnValue(snapshot)
+        devices.getDisconnectedControl = jest.fn().mockReturnValue(undefined)
+        Inject('DevicePairing', pairingMock)
+        Inject('PairingVisitTracker', trackerMock)
 
         service = new RideDisplayService()
         service.observer = new Observer()
@@ -89,8 +105,94 @@ describe('RideDisplayService - start overlay', () => {
         Inject('DeviceRide', null)
         Inject('RouteList', null)
         Inject('PairingVisitTracker', null)
+        Inject('DevicePairing', null)
         service.reset()
         jest.clearAllMocks()
+    })
+
+    describe('devices snapshot', () => {
+        const snapshots = () => logged('start overlay devices snapshot')
+
+        test('is logged once per ride start, before the devices are started', () => {
+            devices.start.mockImplementation(() => { expect(snapshots()).toHaveLength(1); return Promise.resolve(true) })
+
+            service.start()
+
+            expect(snapshots()).toEqual([OC({ ...snapshot, pairingAttemptActive: false, pairingScanActive: false })])
+            expect(devices.start).toHaveBeenCalled()
+        })
+
+        test('contains primitives only', () => {
+            service.start()
+
+            Object.values(snapshots()[0]).forEach( v => expect(['string', 'number', 'boolean']).toContain(typeof v))
+        })
+
+        test('a pairing attempt or scan that is still running is reported as canary', () => {
+            pairingMock.getActivity.mockReturnValue({ pairing: { attemptId: 1, ageMs: 5, udids: [] }, scanning: { scanId: 2, kind: 'search' }, stopping: false })
+
+            service.start()
+
+            expect(snapshots()[0]).toEqual(OC({ pairingAttemptActive: true, pairingScanActive: true }))
+        })
+
+        test('start flow: direct when the device was confirmed before and no Pairing page came in between', () => {
+            pairingMock.isReadyToStart.mockReturnValue(true)
+
+            service.start()
+
+            expect(snapshots()[0]).toEqual(OC({ startFlow: 'direct', readyToStart: true, lastPairingExit: 'none', msSincePairingExit: -1 }))
+        })
+
+        test('start flow: pairing-ok after the Pairing page was left with OK', () => {
+            pairingMock.isReadyToStart.mockReturnValue(true)
+            trackerMock.getLastExit.mockReturnValue({ via: 'ok', ageMs: 300 })
+
+            service.start()
+
+            expect(snapshots()[0]).toEqual(OC({ startFlow: 'pairing-ok', lastPairingExit: 'ok', msSincePairingExit: 300 }))
+        })
+
+        test('start flow: pairing-simulate when the ride is started as simulation', () => {
+            devices.enforceSimulator = jest.fn()
+
+            service.start(true)
+
+            expect(snapshots()[0]).toEqual(OC({ startFlow: 'pairing-simulate' }))
+        })
+
+        test('counts the ride starts of the session', () => {
+            service.start()
+            service.start()
+
+            expect(snapshots().map( s => s.ridesStartedInSession)).toEqual([0, 1])
+        })
+    })
+
+    describe('leaving a ride with the control device disconnected', () => {
+        test('resets the ready-to-start flag when a ride is left and the control device is gone', () => {
+            devices.getDisconnectedControl.mockReturnValue({ name: 'Trainer', started: false, stopped: true })
+
+            service.stopDevices(false)
+
+            expect(pairingMock.resetReadyToStart).toHaveBeenCalledWith({ controlName: 'Trainer', controlAdapterStarted: false, controlAdapterStopped: true })
+        })
+
+        test('keeps the flag when the control device is connected', () => {
+            service.stopDevices(false)
+
+            expect(pairingMock.resetReadyToStart).not.toHaveBeenCalled()
+            expect(devices.pause).toHaveBeenCalled()
+        })
+
+        test('does not touch the flag on app exit', () => {
+            devices.stop = jest.fn().mockResolvedValue(true)
+            devices.getDisconnectedControl.mockReturnValue({ name: 'Trainer', started: false, stopped: true })
+
+            service.stopDevices(true)
+
+            expect(pairingMock.resetReadyToStart).not.toHaveBeenCalled()
+        })
     })
 
     describe('phases', () => {

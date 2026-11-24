@@ -1547,6 +1547,21 @@ export class DevicePairingService  extends IncyclistService{
         this.pairingConfirmed = true
     }
 
+    /**
+     * Withdraws the confirmation of the last Pairing page visit, so that the next ride start goes
+     * through the Pairing page again (used when a ride was left with the control device disconnected).
+     *
+     * @returns `true` if the device was confirmed before
+     */
+    resetReadyToStart(info:{controlName:string, controlAdapterStarted:boolean, controlAdapterStopped:boolean}):boolean {
+        if (!this.pairingConfirmed)
+            return false
+
+        this.pairingConfirmed = false
+        this.logEvent({message:'ready to start reset', reason:'control device disconnected', ...info})
+        return true
+    }
+
     protected async restartPair() {
         if (!this.isPairing())
             return
