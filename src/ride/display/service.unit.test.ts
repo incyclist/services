@@ -572,6 +572,73 @@ describe('RideDisplayService', () => {
         })
     })
 
+    describe('cancelStart', () => {
+        let service: any
+        let stopRide: jest.SpyInstance
+        let logEvent: jest.SpyInstance
+        let logError: jest.SpyInstance
+        let release: () => void
+        let gate: Promise<void>
+
+        const cancelEvents = () => logEvent.mock.calls.filter(([e]) => e?.message === 'start ride cancel')
+
+        beforeEach(() => {
+            service = new RideDisplayService()
+            service.state = 'Starting'
+            service.displayService = { stop: jest.fn() }
+
+            jest.spyOn(service, 'getStartOverlayProps').mockReturnValue({})
+            jest.spyOn(service, 'getRideModeService').mockReturnValue({ getLogProps: jest.fn().mockReturnValue({}) })
+            gate = new Promise<void>(res => { release = res })
+            jest.spyOn(service, 'cancelDeviceRetries').mockImplementation(() => gate)
+            stopRide = jest.spyOn(service, 'stopRide').mockImplementation(async () => { service.state = 'Closing' })
+            logEvent = jest.spyOn(service, 'logEvent')
+            logError = jest.spyOn(service, 'logError')
+        })
+
+        afterEach(() => {
+            jest.restoreAllMocks()
+            service?.reset()
+        })
+
+        test('second call while the first is still running is a no-op', async () => {
+            const first = service.cancelStart()
+            const second = service.cancelStart()
+            release()
+            await Promise.all([first, second])
+
+            expect(cancelEvents()).toHaveLength(1)
+            expect(stopRide).toHaveBeenCalledTimes(1)
+            expect(logError).not.toHaveBeenCalled()
+        })
+
+        test('second call after the first completed is a no-op', async () => {
+            const first = service.cancelStart()
+            release()
+            await first
+
+            await service.cancelStart()
+
+            expect(cancelEvents()).toHaveLength(1)
+            expect(stopRide).toHaveBeenCalledTimes(1)
+            expect(logError).not.toHaveBeenCalled()
+        })
+
+        test('a new ride can be cancelled after a previous cancel completed', async () => {
+            const first = service.cancelStart()
+            release()
+            await first
+
+            service.state = 'Starting'
+            const second = service.cancelStart()
+            release()
+            await second
+
+            expect(cancelEvents()).toHaveLength(2)
+            expect(stopRide).toHaveBeenCalledTimes(2)
+        })
+    })
+
     describe('discardSimulatedRide', () => {
         let service: any
         let calls: string[]

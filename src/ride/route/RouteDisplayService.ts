@@ -417,7 +417,7 @@ export class RouteDisplayService extends RideModeService {
         // but might also be deleted when route is finished, but workout continues
         const prev = this._startSettings
 
-        this._startSettings = this.getRouteList().getStartSettings() as RouteSettings ?? prev
+        this._startSettings = this.getRouteList().getStartSettings() as RouteSettings ?? prev ?? {} as RouteSettings
 
         this._startSettings.startPos = this._startSettings.startPos??0
         this._startSettings.realityFactor = this._startSettings.realityFactor??100
