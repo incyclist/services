@@ -5,6 +5,7 @@ describe('TrainingPeaks API', () => {
     let api
     let restClient
     let settings
+    let bindings
 
     const NOW = new Date('2026-01-01T10:00:00Z').valueOf()
 
@@ -24,6 +25,8 @@ describe('TrainingPeaks API', () => {
 
         api.getApi = jest.fn(() => restClient)
         api.getUserSettings = jest.fn(() => settings)
+        bindings = { appInfo: { getAppVersion: () => '1.2.3' } }
+        api.getBindings = jest.fn(() => bindings)
     })
 
     afterEach(() => {
@@ -82,9 +85,77 @@ describe('TrainingPeaks API', () => {
             expect(restClient.request).toHaveBeenCalledWith(expect.objectContaining({
                 method: 'get',
                 url: 'https://api.trainingpeaks.com/v1/athlete/profile',
-                headers: { Authorization: 'Bearer old-access-token' }
+                headers: { Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' }
             }))
             expect(response.data).toEqual({ ok: true })
+        })
+
+        test('identifies the client with a User-Agent, even if the app version is not known', async () => {
+            bindings.appInfo = undefined
+            api.init({ ...initialConfig })
+            restClient.request.mockResolvedValue({ data: {} })
+
+            await api.get('/v1/athlete/profile')
+
+            expect(restClient.request.mock.calls[0][0].headers['User-Agent']).toBe('Incyclist/unknown')
+        })
+
+        describe('via the fetch binding', () => {
+            let fetchBinding
+
+            const fetchResponse = (status: number, data: string, headers = {}) => ({ ok: status >= 200 && status < 300, status, statusText: '', headers, data })
+
+            beforeEach(() => {
+                fetchBinding = { fetch: jest.fn() }
+                bindings.fetch = fetchBinding
+                api.init({ ...initialConfig })
+            })
+
+            test('sends the request with the User-Agent and parses a JSON response', async () => {
+                fetchBinding.fetch.mockResolvedValue(fetchResponse(200, '[{"Id":1}]'))
+
+                const response = await api.get('/v2/workouts/2026-01-01/2026-01-30')
+
+                expect(restClient.request).not.toHaveBeenCalled()
+                expect(fetchBinding.fetch).toHaveBeenCalledWith(
+                    'https://api.trainingpeaks.com/v2/workouts/2026-01-01/2026-01-30',
+                    { method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' }), body: undefined })
+                expect(response.data).toEqual([{ Id: 1 }])
+            })
+
+            test('sends a JSON body and delivers the response headers', async () => {
+                fetchBinding.fetch.mockResolvedValue(fetchResponse(201, '', { location: 'https://api.trainingpeaks.com/v3/status/abc' }))
+
+                const response = await api.request('post', '/v3/file', { Filename: 'a.tcx' })
+
+                const [, init] = fetchBinding.fetch.mock.calls[0]
+                expect(init.method).toBe('POST')
+                expect(init.body).toBe('{"Filename":"a.tcx"}')
+                expect(init.headers['Content-Type']).toBe('application/json')
+                expect(response.headers.location).toBe('https://api.trainingpeaks.com/v3/status/abc')
+            })
+
+            test('keeps the text of a response that was requested as text', async () => {
+                fetchBinding.fetch.mockResolvedValue(fetchResponse(200, '{"not":"parsed"}'))
+
+                const response = await api.get('/v2/workouts/wod/file/1/?format=zwo', { responseType: 'text' })
+
+                expect(response.data).toBe('{"not":"parsed"}')
+            })
+
+            test('keeps text that is not valid JSON', async () => {
+                fetchBinding.fetch.mockResolvedValue(fetchResponse(200, '{broken'))
+
+                const response = await api.get('/v1/athlete/profile')
+
+                expect(response.data).toBe('{broken')
+            })
+
+            test('throws an error that carries the response if the request was rejected', async () => {
+                fetchBinding.fetch.mockResolvedValue(fetchResponse(422, '{"Message":"exists"}'))
+
+                await expect(api.get('/v3/file')).rejects.toMatchObject({ response: { status: 422, data: { Message: 'exists' } } })
+            })
         })
 
         test('uses the API url from the user settings (sandbox)', async () => {
@@ -107,7 +178,7 @@ describe('TrainingPeaks API', () => {
 
             expect(restClient.request).toHaveBeenCalledTimes(2)
             expect(restClient.request.mock.calls[0][0].url).toBe('https://auth.incyclist.com/trainingpeaks/refresh')
-            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-access-token' })
+            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-access-token', 'User-Agent': 'Incyclist/1.2.3' })
         })
 
         test('refreshes if there is no expiration', async () => {
@@ -215,7 +286,7 @@ describe('TrainingPeaks API', () => {
             const request = restClient.request.mock.calls[0][0]
             expect(request.method).toBe('get')
             expect(request.url).toBe('https://api.trainingpeaks.com/v2/workouts/2026-01-05/2026-02-03')
-            expect(request.headers).toEqual({ Authorization: 'Bearer old-access-token' })
+            expect(request.headers).toEqual({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' })
         })
 
         test('returns an empty list if there is no data', async () => {
@@ -253,7 +324,7 @@ describe('TrainingPeaks API', () => {
 
             await api.getWorkouts(new Date(2026, 0, 5), new Date(2026, 0, 6))
 
-            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-at' })
+            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-at', 'User-Agent': 'Incyclist/1.2.3' })
         })
     })
 
@@ -305,7 +376,7 @@ describe('TrainingPeaks API', () => {
             const post = restClient.request.mock.calls[0][0]
             expect(post.method).toBe('post')
             expect(post.url).toBe('https://api.trainingpeaks.com/v3/file')
-            expect(post.headers).toEqual({ Authorization: 'Bearer old-access-token' })
+            expect(post.headers).toEqual({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' })
             expect(post.data).toEqual({
                 UploadClient: 'Incyclist',
                 Filename: 'ride.tcx',

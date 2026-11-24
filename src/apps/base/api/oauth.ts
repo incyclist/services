@@ -1,4 +1,4 @@
-import { AxiosInstance, AxiosResponse } from 'axios'
+import { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { EventLogger } from 'gd-eventlog'
 import { Observer } from '../../../base/types/observer'
 import { valid } from '../../../utils/valid'
@@ -87,13 +87,21 @@ export abstract class OAuthAppApiBase<
             ...config
         }
         try {
-            return await this.getApi().request(request)
+            return await this.send(request)
         }
         catch (err) {
             if (options.checkRevoked !== false)
                 await this.checkRevoked(err)
             throw err
         }
+    }
+
+    /**
+     * Sends the request. Apps that need more control over the request than the REST client provides (e.g. headers that
+     * are forbidden in a browser, like `User-Agent`) can override this.
+     */
+    protected async send(request: AxiosRequestConfig): Promise<AxiosResponse> {
+        return await this.getApi().request(request)
     }
 
     /**
