@@ -79,7 +79,7 @@ describe('TrainerDayAppConnection', () => {
             const success = service.init()
 
             expect(success).toBe(true)
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainerDay init done', hasCredentials: true })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'external app init done', externalApp: 'TrainerDay', hasCredentials: true })
             expect(service.isConnected()).toBe(true)
             expect(service.isConnecting()).toBe(false)
         })
@@ -128,7 +128,7 @@ describe('TrainerDayAppConnection', () => {
             const success = service.init()
 
             expect(success).toBe(true)
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainerDay init done', hasCredentials: false })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'external app init done', externalApp: 'TrainerDay', hasCredentials: false })
             expect(service.isConnected()).toBe(false)
         })
 
@@ -151,7 +151,6 @@ describe('TrainerDayAppConnection', () => {
             service.init()
             await waitNextTick()
 
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainerDay Save Credentials' })
             expect(userSettings.set).toHaveBeenCalledWith(SETTINGS_KEY, {
                 id: '42',
                 accesstoken: 'new-at',
@@ -191,8 +190,8 @@ describe('TrainerDayAppConnection', () => {
             const success = await service.connect({ id: '42', accesstoken: 'test', refreshtoken: 'test2', expiration: new Date('2024-01-01').toISOString() })
 
             expect(success).toBe(true)
-            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with TrainerDay' })
-            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with TrainerDay success' })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with app', externalApp: 'TrainerDay' })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with app success', externalApp: 'TrainerDay' })
             expect(mocks.api?.init).toHaveBeenCalled()
             expect(mocks.userSettings?.set).toHaveBeenCalledWith(SETTINGS_KEY, {
                 id: '42',
@@ -260,7 +259,7 @@ describe('TrainerDayAppConnection', () => {
 
             await service.connect({ accesstoken: 'a', refreshtoken: 'r' })
 
-            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'error', fn: 'saveCredentials', error: 'disk full' }))
+            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Error', fn: 'saveCredentials', error: 'disk full', externalApp: 'TrainerDay' }))
         })
     })
 

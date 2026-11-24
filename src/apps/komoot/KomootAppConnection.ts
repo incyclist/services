@@ -23,14 +23,15 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
     async connect( credentials:KomootCredentials):Promise<boolean> {
         this.ensureInitialized()
 
-        this.logEvent({message:'Komoot Login'})
+        this.logEvent({ message: 'Connect with app', externalApp:'Komoot' })
+
         this.emit('login-start')
         try {
             const {username,password,userid} = credentials
             const { authenticated, error}  = await this.getApi().login(username,password,userid)
 
             if (authenticated) {
-                this.logEvent({message:'Komoot Login success'})
+                this.logEvent({ message: 'Connect with app success',externalApp:'Komoot' })
 
                 this.credentials = credentials            
                 this.isInitialized = true;
@@ -45,7 +46,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
             }
         }
         catch(err) {
-            this.logEvent({message:'Komoot Login failed',error: err.message})
+            this.logEvent({ message: 'Connect with app failed',externalApp:'Komoot', reason: err.message })
             this.emit('login-failure',err.message)
             throw err
         }
@@ -131,12 +132,13 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
                 
             
             }
-            this.logEvent( {message:'Komoot init done', hasCredentials:(valid(credentials?.username)&& valid(credentials?.password))})
+            if (!this.isInitialized)
+                this.logEvent( {message:'external app init done',externalApp:'Komoot', hasCredentials:(valid(credentials?.username)&& valid(credentials?.password))})
             isInitialized = true;           
 
         }
         catch(err) {
-            this.logEvent({message:'error', error:err.message, fn:'init',stack:err.stack})
+            this.logError(err,'init',{externaApp:'Komoot'})
             isInitialized = false;
         }
 
@@ -175,7 +177,6 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
     }
 
     protected saveCredentials():void {
-        this.logger.logEvent({message:'Komoot Save Credentials'})
 
         let auth
         try {
@@ -184,10 +185,9 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
 
         }
         catch(err) {
-            this.logEvent( {message: 'error', fn:'saveCredentials', error:err.message, stack:err.stack})
+            this.logError(err,'saveCredentials',{externalApp:'Komoot'})            
         }
 
-        this.logEvent({message:'Komoot Save Credentials done'})
         return auth
     }
 

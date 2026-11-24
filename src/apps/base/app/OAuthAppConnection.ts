@@ -39,6 +39,7 @@ export abstract class OAuthAppConnection<
 
     /** the listeners that were registered at the observer of the API (so that they are not registered twice after a reconnect) */
     protected declare apiListeners?: { observer: Observer, onToken: (config: Config) => void, onFailed: () => void }
+    protected initLogShown: boolean
 
     /**
      * Connects with the credentials received from the auth-server.
@@ -48,12 +49,12 @@ export abstract class OAuthAppConnection<
 
         this.ensureInitialized()
 
-        this.logEvent({ message: `Connect with ${this.appName}` })
+        this.logEvent({ message: 'Connect with app', externalApp:this.appName })
 
         try {
             const config = this.createConfig(credentials)
             if (!valid(config?.accessToken)) {
-                this.logEvent({ message: `Connect with ${this.appName} failed`, reason: 'no access token' })
+                this.logEvent({ message: 'Connect with app failed',externalApp:this.appName, reason: 'no access token' })
                 return false
             }
 
@@ -67,13 +68,13 @@ export abstract class OAuthAppConnection<
             // also persist when re-connecting, as the refresh token of a previous connection is no longer valid
             this.saveCredentials(config)
 
-            this.logEvent({ message: `Connect with ${this.appName} success` })
+            this.logEvent({ message: 'Connect with app success',externalApp:this.appName })
             return true
         }
         catch (err) {
             // Should never happen, but just in case ...  I will log
             // istanbul ignore next
-            this.logError(err, 'connect')
+            this.logError(err, 'connect',{externalApp:this.appName})
             throw err
         }
     }
@@ -96,7 +97,7 @@ export abstract class OAuthAppConnection<
         catch (err) {
             // Should never happen, but just in case ...  I will log
             // istanbul ignore next
-            this.logError(err, 'disconnect')
+            this.logError(err, 'disconnect',{externalApp:this.appName})
         }
     }
 
@@ -142,7 +143,12 @@ export abstract class OAuthAppConnection<
         try {
             const auth = this.getCredentials()
 
-            this.logEvent({ message: `${this.appName} init done`, hasCredentials: Boolean(auth) })
+            // once per session: log 'external app init done'
+            if (!this.initLogShown) {
+                this.logEvent({ message: 'external app init done',externalApp:this.appName,  hasCredentials: Boolean(auth) })
+                this.initLogShown = true
+            }
+
             const config = auth ? this.createConfig(auth) : undefined
             if (valid(config?.accessToken)) {
                 this.config = config
@@ -170,20 +176,17 @@ export abstract class OAuthAppConnection<
 
         try {
             if (!this.isConnected()) {
-                this.logEvent({ message: `${this.appName} Delete Credentials` })
+                this.logEvent({ message: 'Delete Credentials', externalApp:this.appName })
                 this.getUserSettings().set(this.getSettingsKey(), null)
                 return
             }
 
-            this.logEvent({ message: `${this.appName} Save Credentials` })
             this.getUserSettings().set(this.getSettingsKey(), this.createCredentials(this.config))
         }
         catch (err) {
-            this.logEvent({ message: 'error', fn: 'saveCredentials', error: err.message, stack: err.stack })
+            this.logError(err,'saveCredentials',{externalApp:this.appName})
             return
         }
-
-        this.logEvent({ message: `${this.appName} Save Credentials done` })
     }
 
     protected initApi(config: Config) {
@@ -196,7 +199,7 @@ export abstract class OAuthAppConnection<
 
         const onToken = (updated: Config) => { this.updateConfig(updated) }
         const onFailed = () => {
-            this.logEvent({ message: `${this.appName} authentication failed, credentials removed (reconnect required)` })
+            this.logEvent({ message: 'authentication failed, credentials removed (reconnect required)',externalApp:this.appName })
             this.disconnect()
             this.emit('auth.failed')
         }

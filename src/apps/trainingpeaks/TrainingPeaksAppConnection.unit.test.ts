@@ -79,7 +79,7 @@ describe('TrainingPeaksAppConnection', () => {
             const success = service.init()
 
             expect(success).toBe(true)
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainingPeaks init done', hasCredentials: true })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'external app init done', externalApp: 'TrainingPeaks', hasCredentials: true })
             expect(service.isConnected()).toBe(true)
             expect(service.isConnecting()).toBe(false)
         })
@@ -128,7 +128,7 @@ describe('TrainingPeaksAppConnection', () => {
             const success = service.init()
 
             expect(success).toBe(true)
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainingPeaks init done', hasCredentials: false })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'external app init done', externalApp: 'TrainingPeaks', hasCredentials: false })
             expect(service.isConnected()).toBe(false)
         })
 
@@ -151,7 +151,6 @@ describe('TrainingPeaksAppConnection', () => {
             service.init()
             await waitNextTick()
 
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainingPeaks Save Credentials' })
             expect(userSettings.set).toHaveBeenCalledWith(SETTINGS_KEY, {
                 id: '42',
                 accesstoken: 'new-at',
@@ -191,8 +190,8 @@ describe('TrainingPeaksAppConnection', () => {
             const success = await service.connect({ id: '42', accesstoken: 'test', refreshtoken: 'test2', expiration: new Date('2024-01-01').toISOString() })
 
             expect(success).toBe(true)
-            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with TrainingPeaks' })
-            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with TrainingPeaks success' })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with app', externalApp: 'TrainingPeaks' })
+            expect(logSpy).toHaveBeenCalledWith({ message: 'Connect with app success', externalApp: 'TrainingPeaks' })
             expect(mocks.api?.init).toHaveBeenCalled()
             expect(mocks.userSettings?.set).toHaveBeenCalledWith(SETTINGS_KEY, {
                 id: '42',
@@ -242,7 +241,7 @@ describe('TrainingPeaksAppConnection', () => {
 
             await service.connect({ accesstoken: 'a', refreshtoken: 'r' })
 
-            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'error', fn: 'saveCredentials', error: 'disk full' }))
+            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Error', fn: 'saveCredentials', error: 'disk full', externalApp: 'TrainingPeaks' }))
         })
     })
 
