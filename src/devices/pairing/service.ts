@@ -340,7 +340,7 @@ export class DevicePairingService  extends IncyclistService{
     // was already issued is left to finish, nothing new starts.
     protected async leave():Promise<void> {
         const inFlight = this.getActivity()
-        this.logEvent({message:'leave pairing', pairing:inFlight.pairing?.attemptId, scanning:inFlight.scanning?.scanId})
+        this.logEvent({message:'leave pairing', attemptId:inFlight.pairing?.attemptId, scanId:inFlight.scanning?.scanId})
         this.discardPreparingAttempt()
         await this.stopScanning()
     }
