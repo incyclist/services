@@ -39,7 +39,9 @@ export class IncyclistPageService extends IncyclistService implements IPageServi
         
     }
     closePage(): void {
-        delete IncyclistPageService.currentPage
+        // a late close (e.g. the platform's unmount hook) must not unregister the page that has opened since
+        if (IncyclistPageService.currentPage===this)
+            delete IncyclistPageService.currentPage
         this.getAppState().setState('prevPage',this.name )
         this.getAppState().setState('currentPage',null )
         this.getAppState().setState('currentPageService',null )

@@ -9,9 +9,7 @@ import { DevicesPageService } from './service'
  * Characterization of leaving the pairing page: every button exit closes the page twice, once from
  * moveTo() and once from the platform's unmount hook.
  *
- * Tests named `today:` pin the current behaviour, including behaviour that is wrong. Tests wrapped in
- * `test.failing` describe the intended behaviour and are known defects: they are reported as passing
- * while the defect exists. The fixing change flips them to plain `test`.
+ * Only the first close acts; the second one is ignored.
  */
 describe('DevicesPageService: closing the page twice', () => {
 
@@ -101,14 +99,7 @@ describe('DevicesPageService: closing the page twice', () => {
             expect(pairing.setReadyToStart).toHaveBeenCalledTimes(1)
         })
 
-        test('today: the second close runs an unfiltered stop() that undoes the hand-off (known defect R2)', () => {
-            leaveWith('onOK')
-
-            expect(pairing.stop).toHaveBeenCalledTimes(1)
-            expect(pairing.stop).toHaveBeenCalledWith([], false)     // no adapter filter: pauses the handed-over adapters too
-        })
-
-        test.failing('known defect R2: the second close does not stop the devices that were handed to the ride', () => {
+        test('the second close does not stop the devices that were handed to the ride', () => {
             leaveWith('onOK')
 
             expect(pairing.stop).not.toHaveBeenCalled()
@@ -131,13 +122,7 @@ describe('DevicesPageService: closing the page twice', () => {
             expect(pairing.prepareStart).toHaveBeenCalledWith(['Simulator'])
         })
 
-        test('today: the second close runs an unfiltered stop() (known defect R2)', () => {
-            leaveWith('onSimulate')
-
-            expect(pairing.stop).toHaveBeenCalledTimes(1)
-        })
-
-        test.failing('known defect R2: the second close does not stop the simulator hand-off', () => {
+        test('the second close does not stop the simulator hand-off', () => {
             leaveWith('onSimulate')
 
             expect(pairing.stop).not.toHaveBeenCalled()
@@ -146,14 +131,7 @@ describe('DevicesPageService: closing the page twice', () => {
 
     describe('Skip', () => {
 
-        test('today: stops the devices twice, once per close (known defect R2)', () => {
-            leaveWith('onSkip')
-
-            expect(pairing.stop).toHaveBeenCalledTimes(2)
-            expect(stateMachine.stop).toHaveBeenCalledTimes(2)
-        })
-
-        test.failing('known defect R2: stops the devices and the state machine once', () => {
+        test('stops the devices and the state machine once', () => {
             leaveWith('onSkip')
 
             expect(pairing.stop).toHaveBeenCalledTimes(1)
@@ -163,18 +141,7 @@ describe('DevicesPageService: closing the page twice', () => {
 
     describe('registration of the current page', () => {
 
-        test('today: the second close clears the registration of a page opened in between (known defect R2)', () => {
-            service.openPage()
-            ;(service as any).onSkip()                         // first close
-            const nextPage = { name: 'routes' }
-            ;(IncyclistPageService as any).currentPage = nextPage   // the next page registers itself
-
-            service.closePage()                                // unmount hook of the pairing page
-
-            expect((IncyclistPageService as any).currentPage).toBeUndefined()
-        })
-
-        test.failing('known defect R2: the second close leaves the next page registered', () => {
+        test('the second close leaves the next page registered', () => {
             service.openPage()
             ;(service as any).onSkip()
             const nextPage = { name: 'routes' }

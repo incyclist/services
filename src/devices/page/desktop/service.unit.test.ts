@@ -508,6 +508,7 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
     describe('closePage', ()=> {
 
         test('stops the pairing when leaving without starting a ride (Skip/Cancel)', ()=> {
+            service.openPage()
             service.closePage()
 
             expect(pairing.stop).toHaveBeenCalled()

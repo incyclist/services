@@ -560,6 +560,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
     describe('closePage', ()=> {
 
         test('stops the pairing when leaving without starting a ride (Skip)', ()=> {
+            service.openPage()
             service.closePage()
 
             expect(pairing.stop).toHaveBeenCalled()
