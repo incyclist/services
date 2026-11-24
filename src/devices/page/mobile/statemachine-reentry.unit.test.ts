@@ -7,10 +7,9 @@ import { PairingPageStateMachine } from './statemachine'
 /**
  * Characterization of the pairing page state machine around leaving and re-entering the page.
  *
- * Tests named `today:` pin the behaviour as it is now, including behaviour that is wrong.
- * Tests wrapped in `test.failing` describe the intended behaviour and are known defects: they pass
- * (as "expected to fail") as long as the defect exists. When the defect is fixed, jest reports
- * them as failing, and the fixing change flips them to plain `test`.
+ * Tests named `today:` pin behaviour as it is. Tests wrapped in `test.failing` are known defects that are
+ * not fixed yet (re-entry while an attempt or scan is in flight): they pass as "expected to fail" and are
+ * flipped to plain `test` by the change that fixes them.
  */
 describe('PairingPage state machine: leave and re-entry', () => {
 
@@ -92,17 +91,7 @@ describe('PairingPage state machine: leave and re-entry', () => {
             expect(pairing.listenerCount('pairing-done')).toBe(0)
         })
 
-        test('today: the selection state survives stop() (known defect R1)', () => {
-            startPairingPending()
-            sm.onDeviceSelectionOpened(jest.fn())
-            expect(sm.selectState).toBe('Waiting')
-
-            sm.stop()
-
-            expect(sm.selectState).toBe('Waiting')
-        })
-
-        test.failing('known defect R1: stop() resets the selection state to Closed', () => {
+        test('stop() resets the selection state to Closed', () => {
             startPairingPending()
             sm.onDeviceSelectionOpened(jest.fn())
 
@@ -111,16 +100,7 @@ describe('PairingPage state machine: leave and re-entry', () => {
             expect(sm.selectState).toBe('Closed')
         })
 
-        test('today: the selection timeout survives stop() (known defect R1)', () => {
-            startPairingPending()
-            sm.onDeviceSelectionOpened(jest.fn())
-
-            sm.stop()
-
-            expect((sm as any).selectionTimeout).toBeDefined()
-        })
-
-        test.failing('known defect R1: stop() clears the selection timeout', () => {
+        test('stop() clears the selection timeout', () => {
             startPairingPending()
             sm.onDeviceSelectionOpened(jest.fn())
 
@@ -159,22 +139,7 @@ describe('PairingPage state machine: leave and re-entry', () => {
 
     describe('continuations of a device selection that was closed before stop()', () => {
 
-        test('today: onDeviceSelectionClosed() continues after stop() and starts a new pairing attempt (known defect R1)', async () => {
-            startPairingPending()
-            const stopPairing = deferred()
-            pairing.stopPairing.mockReturnValueOnce(stopPairing.promise)
-
-            const closing = sm.onDeviceSelectionClosed()     // awaits stopPairing()
-            sm.stop()                                        // the rider leaves the page
-            expect(sm.state).toBe('Closed')
-            stopPairing.resolve()
-            await closing
-
-            expect(pairing.startPairing).toHaveBeenCalledTimes(2)
-            expect(sm.state).toBe('Pairing')
-        })
-
-        test.failing('known defect R1: onDeviceSelectionClosed() does nothing once stop() was called', async () => {
+        test('onDeviceSelectionClosed() does nothing once stop() was called', async () => {
             startPairingPending()
             const stopPairing = deferred()
             pairing.stopPairing.mockReturnValueOnce(stopPairing.promise)
@@ -188,22 +153,7 @@ describe('PairingPage state machine: leave and re-entry', () => {
             expect(sm.state).toBe('Closed')
         })
 
-        test('today: the selection timeout continuation starts a scan after stop() (known defect R1)', async () => {
-            startPairingPending()
-            sm.onDeviceSelectionOpened(jest.fn())             // Waiting + 3s timer
-            const stopPairing = deferred()
-            pairing.stopPairing.mockReturnValueOnce(stopPairing.promise)
-            await jest.advanceTimersByTimeAsync(3000)         // timer fires, awaits stopPairing()
-
-            sm.stop()
-            stopPairing.resolve()
-            await jest.advanceTimersByTimeAsync(0)
-
-            expect(pairing.startScanning).toHaveBeenCalledTimes(1)
-            expect(sm.selectState).toBe('Active')
-        })
-
-        test.failing('known defect R1: the selection timeout continuation does nothing once stop() was called', async () => {
+        test('the selection timeout continuation does nothing once stop() was called', async () => {
             startPairingPending()
             sm.onDeviceSelectionOpened(jest.fn())
             const stopPairing = deferred()
@@ -231,19 +181,7 @@ describe('PairingPage state machine: leave and re-entry', () => {
             await closing
         }
 
-        test('today: start() logs "State machine in illegal state Pairing" and does not register handlers', async () => {
-            await leaveWithStaleContinuation()
-            const logSpy = jest.spyOn((sm as any).logger, 'logEvent')
-
-            sm.start(jest.fn())
-
-            const errors = errorLogs(logSpy)
-            expect(errors).toHaveLength(1)
-            expect(errors[0][0].error).toBe('State machine in illegal state Pairing')
-            expect(pairing.listenerCount('pairing-done')).toBe(0)
-        })
-
-        test.failing('known defect R1: start() after a leave never sees an illegal state', async () => {
+        test('start() after a leave never sees an illegal state', async () => {
             await leaveWithStaleContinuation()
             const logSpy = jest.spyOn((sm as any).logger, 'logEvent')
 
@@ -251,22 +189,6 @@ describe('PairingPage state machine: leave and re-entry', () => {
 
             expect(errorLogs(logSpy)).toHaveLength(0)
             expect(sm.state).toBe('Idle')
-        })
-
-        test('today: the same happens with a scan started by the stale continuation (state Scanning)', async () => {
-            startPairingPending()
-            sm.onDeviceSelectionOpened(jest.fn())
-            const stopPairing = deferred()
-            pairing.stopPairing.mockReturnValueOnce(stopPairing.promise)
-            await jest.advanceTimersByTimeAsync(3000)
-            sm.stop()
-            stopPairing.resolve()
-            await jest.advanceTimersByTimeAsync(0)
-            const logSpy = jest.spyOn((sm as any).logger, 'logEvent')
-
-            sm.start(jest.fn())
-
-            expect(errorLogs(logSpy)[0][0].error).toBe('State machine in illegal state Scanning')
         })
     })
 
@@ -292,23 +214,7 @@ describe('PairingPage state machine: leave and re-entry', () => {
             expect(pairing.startPairing).toHaveBeenCalledTimes(1)
         })
 
-        test('today (a): the old attempt\'s cleanup clears the new attempt\'s in-flight marker (known defect R1)', async () => {
-            const first = startPairingPending()
-            sm.stop()
-            const second = deferred()
-            pairing.startPairing.mockReturnValueOnce(second.promise)
-            sm.start(jest.fn())
-            sm.onPageReady()
-            const secondMarker = (sm as any).pairingPromise
-            expect(secondMarker).toBeDefined()
-
-            first.resolve()
-            await jest.advanceTimersByTimeAsync(0)
-
-            expect((sm as any).pairingPromise).toBeUndefined()
-        })
-
-        test.failing('known defect R1: the old attempt\'s cleanup leaves the new attempt\'s marker in place', async () => {
+        test('the old attempt\'s cleanup leaves the new attempt\'s marker in place', async () => {
             const first = startPairingPending()
             sm.stop()
             const second = deferred()
@@ -352,13 +258,33 @@ describe('PairingPage state machine: leave and re-entry', () => {
 
     describe('pause() and resume()', () => {
 
-        test('today (f): pause() sets Closed but keeps the service handlers registered (known defect R1)', async () => {
+        test('pause() ends the session like stop(): handlers removed', async () => {
             sm.start(jest.fn())
 
             await sm.pause()
 
             expect(sm.state).toBe('Closed')
+            expect(pairing.listenerCount('pairing-done')).toBe(0)
+        })
+
+        test('resume() after pause() opens the session again like start()', async () => {
+            const callback = jest.fn()
+            sm.start(callback)
+            await sm.pause()
+
+            sm.resume()
+
+            expect(sm.state).toBe('Idle')
             expect(pairing.listenerCount('pairing-done')).toBe(1)
+        })
+
+        test('resume() after stop() does nothing', () => {
+            sm.start(jest.fn())
+            sm.stop()
+
+            sm.resume()
+
+            expect(sm.state).toBe('Closed')
         })
 
         test('today (f): pause() stops a running attempt and then the service', async () => {
@@ -370,16 +296,7 @@ describe('PairingPage state machine: leave and re-entry', () => {
             expect(pairing.stop).toHaveBeenCalledWith([], true)
         })
 
-        test('today (f): resume() forces Idle, also while an attempt is running (known defect R1)', () => {
-            startPairingPending()
-            expect(sm.state).toBe('Pairing')
-
-            sm.resume()
-
-            expect(sm.state).toBe('Idle')
-        })
-
-        test.failing('known defect R1: resume() only opens a Closed machine, it never changes a running one', () => {
+        test('resume() only opens a Closed machine, it never changes a running one', () => {
             startPairingPending()
 
             sm.resume()
@@ -388,21 +305,51 @@ describe('PairingPage state machine: leave and re-entry', () => {
         })
     })
 
+    describe('stale continuations are logged', () => {
+
+        test('a dropped continuation logs "stale continuation dropped"', async () => {
+            startPairingPending()
+            const stopPairing = deferred()
+            pairing.stopPairing.mockReturnValueOnce(stopPairing.promise)
+            const logSpy = jest.spyOn((sm as any).logger, 'logEvent')
+            const closing = sm.onDeviceSelectionClosed()
+            sm.stop()
+            stopPairing.resolve()
+            await closing
+
+            const dropped = logSpy.mock.calls.filter(([e]: any) => e?.message === 'stale continuation dropped')
+            expect(dropped).toHaveLength(1)
+            expect((dropped[0][0] as any).fn).toBe('onDeviceSelectionClosed')
+        })
+
+        test('the list close and the selection timeout share one stopPairing() call', async () => {
+            startPairingPending()
+            sm.onDeviceSelectionOpened(jest.fn())
+            const stopPairing = deferred()
+            pairing.stopPairing.mockReturnValueOnce(stopPairing.promise)
+            await jest.advanceTimersByTimeAsync(3000)
+
+            void sm.onDeviceSelectionClosed()
+
+            expect(pairing.stopPairing).toHaveBeenCalledTimes(1)
+            stopPairing.resolve()
+            await jest.advanceTimersByTimeAsync(0)
+        })
+    })
+
     describe('retry timers', () => {
 
-        test('today (e): a second retry timer overwrites the first one without clearing it (known defect R1)', async () => {
+        test('a second retry timer replaces the first one, which is cleared', async () => {
             sm.start(jest.fn())
             sm.onPageReady()
             await (sm as any).pairingPromise
             const clearSpy = jest.spyOn(globalThis, 'clearTimeout')
 
-            pairing.emit('pairing-done')                     // timer 1
+            pairing.emit('pairing-done')
             const first = (sm as any).retryTimeout
-            pairing.emit('pairing-done')                     // timer 2 replaces it
-            const second = (sm as any).retryTimeout
+            pairing.emit('pairing-done')
 
-            expect(second).not.toBe(first)
-            expect(clearSpy).not.toHaveBeenCalledWith(first)
+            expect(clearSpy).toHaveBeenCalledWith(first)
             clearSpy.mockRestore()
         })
     })
