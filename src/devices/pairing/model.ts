@@ -105,12 +105,20 @@ export interface InternalPairingState extends PairingState {
     scanTo?: NodeJS.Timeout
     tsPrevStart?: number;
 
+    // A pairing attempt. `id` is a per-process counter, only the code that created the record may clear it.
+    // The record is 'preparing' until the device start was issued (no `promise`), then 'running'.
     check?: {
+        id?:number
         preparing?:number
         promise?:Promise<boolean>
         to?: NodeJS.Timeout
+        udids?: string[]
+        startedAt?: number
     }
+    // A scan, same rules as for `check`
     scan?: {
+        id?:number
+        kind?: ScanKind
         preparing?:number
         promise?: Promise<DeviceSettings[]>
         adapters?: Array<{ udid:string,adapter:IncyclistDeviceAdapter, handler}>
@@ -121,6 +129,16 @@ export interface InternalPairingState extends PairingState {
 }
 
 
+
+export type ScanKind = 'search' | 'deviceList' | 'enforced'
+
+/** What the service is doing with the devices, independent of whether a Pairing page is open */
+export interface PairingActivity {
+    pairing?: { attemptId:number, ageMs:number, udids:string[] }
+    scanning?: { scanId:number, kind:ScanKind }
+    // a stopPairing()/stopScanning() call is still running
+    stopping: boolean
+}
 
 export interface DeviceSelectState {
     capability:IncyclistCapability

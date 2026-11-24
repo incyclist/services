@@ -1,6 +1,6 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AddDeviceResult, AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal, ConflictResolution, SearchEndReason, SearchStatus  } from "./model";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingActivity, ScanKind, PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal, ConflictResolution, SearchEndReason, SearchStatus  } from "./model";
 import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
@@ -82,6 +82,12 @@ export class DevicePairingService  extends IncyclistService{
     protected rideService: DeviceRideService
     protected pairingConfirmed: boolean = false
 
+
+    // number of stopPairing()/stopScanning() calls that have not returned yet, see getActivity()
+    protected stopOps = 0
+    // Owner of the direct mode loop (run -> pair/scan -> run). A new Pairing visit gets a new token, which
+    // ends the loops of the visit before - except for a running attempt that the new visit adopts
+    protected loopToken:object = {}
 
     protected settings: PairingSettings={}
     protected state:InternalPairingState = { initialized:false, deleted:[]}
@@ -185,6 +191,10 @@ export class DevicePairingService  extends IncyclistService{
 
         this.pairingConfirmed = false
         this.stalledLogged = false
+
+        // an attempt that is still running from the visit before keeps the loop that drives it
+        if (this.state.check?.promise===undefined)
+            this.loopToken = {}
         
         if (this.state.stopped) {
             // cleanup on 2nd launch
@@ -207,8 +217,7 @@ export class DevicePairingService  extends IncyclistService{
         try {
             await this.loadConfiguration();
             this.updateCapabilityConfig()
-            
-            
+            this.adoptRunningAttempt()
 
             const alreadyInitialized =  this.settings.onStateChanged!==undefined && this.settings.onStateChanged!==null
             this.settings.onStateChanged = onStateChanged
@@ -298,7 +307,10 @@ export class DevicePairingService  extends IncyclistService{
         try {
             this.state.stopRequested = true;
             
-            await this._stop();
+            if (forExit)
+                await this.stopForExit()
+            else
+                await this.leave()
 
             const adapters = this.state?.adapters??[]
             this.pauseAdapters(adapters.filter( a=> !adapterFilter.includes(a.udid)));
@@ -307,7 +319,9 @@ export class DevicePairingService  extends IncyclistService{
             this.settings = {}
             this.state.initialized = false
             this.state.waiting = false;
-            this.state.check = null;
+            // an attempt that is still running keeps its record (and finishes on its own), anything else is dropped
+            if (forExit || this.state.check?.promise===undefined)
+                this.state.check = null;
             this.state.scan = null;
             
             this.state.stopRequested = false;
@@ -320,6 +334,64 @@ export class DevicePairingService  extends IncyclistService{
 
     async exit() {
         return await this.stop([],true)
+    }
+
+    // Leaving the Pairing page (Skip, Cancel, OK, Simulate): scans end, a pairing attempt whose device start
+    // was already issued is left to finish, nothing new starts.
+    protected async leave():Promise<void> {
+        const inFlight = this.getActivity()
+        this.logEvent({message:'leave pairing', attemptId:inFlight.pairing?.attemptId, scanId:inFlight.scanning?.scanId})
+        this.discardPreparingAttempt()
+        await this.stopScanning()
+    }
+
+    protected async stopForExit():Promise<void> {
+        await this.stopScanning()
+        await this._stop()
+    }
+
+    // an attempt record without a device start never starts anything after the leave
+    protected discardPreparingAttempt() {
+        if (this.state.check && this.state.check.promise===undefined) {
+            if (this.state.check.to)
+                clearTimeout(this.state.check.to)
+            delete this.state.check
+        }
+    }
+
+    /**
+     * What the service is doing with the devices at the moment, independent of whether the Pairing page is open
+     */
+    getActivity():PairingActivity {
+        const check = this.state?.check
+        const scan = this.state?.scan
+        return {
+            pairing: check?.promise!==undefined && check.id!==undefined ? { attemptId:check.id, ageMs:Date.now()-(check.startedAt??Date.now()), udids:check.udids??[] } : undefined,
+            scanning: scan?.id!==undefined ? { scanId:scan.id, kind:scan.kind } : undefined,
+            stopping: this.stopOps>0
+        }
+    }
+
+    protected async trackStop<T>(fn:()=>Promise<T>):Promise<T> {
+        this.stopOps++
+        try {
+            return await fn()
+        }
+        finally {
+            this.stopOps--
+        }
+    }
+
+    // a running attempt of a visit that was left: shown as connecting again, and no second one is started
+    protected adoptRunningAttempt() {
+        const { pairing } = this.getActivity()
+        if (!pairing)
+            return
+
+        const udids = pairing.udids
+        const adapters = this.getDeviceConfiguration().getAdapters(false).filter( ai=>udids.includes(ai.udid))
+        this.setPairingConnectState(adapters)
+        this.logEvent({message:'pairing attempt adopted', attemptId:pairing.attemptId, ageMs:pairing.ageMs, platform:this.getPlatform()})
     }
 
     /**
@@ -1045,16 +1117,14 @@ export class DevicePairingService  extends IncyclistService{
             // update this.state.capabilities and be recognized as already-paired (via
             // isPairing()/checkPairingComplete()) if the Devices page is reopened before it completes.
 
-            if (this.isScanning()) {
-                this.state.stopRequested = true;
-                await this._stop();
-            }
+            this.discardPreparingAttempt()
+            await this.stopScanning()
 
             this.removeConfigHandlers()
             this.settings = {}
             this.state.initialized = false
             this.state.waiting = false;
-            if (!stillPairing) {
+            if (!stillPairing || this.state.check?.promise===undefined) {
                 this.state.check = null;
             }
             this.state.scan = null;
@@ -1475,6 +1545,21 @@ export class DevicePairingService  extends IncyclistService{
 
     setReadyToStart() {
         this.pairingConfirmed = true
+    }
+
+    /**
+     * Withdraws the confirmation of the last Pairing page visit, so that the next ride start goes
+     * through the Pairing page again (used when a ride was left with the control device disconnected).
+     *
+     * @returns `true` if the device was confirmed before
+     */
+    resetReadyToStart(info:{controlName:string, controlAdapterStarted:boolean, controlAdapterStopped:boolean}):boolean {
+        if (!this.pairingConfirmed)
+            return false
+
+        this.pairingConfirmed = false
+        this.logEvent({message:'ready to start reset', reason:'control device disconnected', ...info})
+        return true
     }
 
     protected async restartPair() {
@@ -2448,23 +2533,26 @@ export class DevicePairingService  extends IncyclistService{
     async stopScanning() {
         const props = this.state.props || {}
         if (this.isScanning()) {
+            const scanId = this.state.scan.id
             this.removeScanningCallbacks()
             this.pauseAdapters(this.state.adapters);
             this.logEvent({ message: 'Stop Scanning', props });
-            await this.access.stopScan();
-            this.cleanupScan()
+            await this.trackStop( ()=>this.access.stopScan() )
+            this.cleanupScan(scanId)
         }
     }
 
     async stopPairing() {
         const props = this.state.props || {}
         if (this.isPairing()) {
+            const attemptId = this.state.check.id
             this.removePairingCallbacks()
             this.pauseAdapters(this.state.adapters);
 
-            this.logEvent({ message: 'Stop Pairing', props });
-            await this.rideService.cancelStart();
-            delete this.state.check
+            this.logEvent({ message: 'Stop Pairing', props, attemptId });
+            await this.trackStop( ()=>this.rideService.cancelStart() )
+            if (this.state.check?.id===attemptId)
+                delete this.state.check
         }
     }
 
@@ -2474,6 +2562,10 @@ export class DevicePairingService  extends IncyclistService{
             return;
 
         this.emit('run')
+
+        // an attempt of the visit before is still running: it keeps driving the loop
+        if (this.state.check?.promise!==undefined && !this.deviceSelectState && !props.enforcedScan)
+            return
 
         // pairing already ongoing ? stop previous paring
         if ((this.isPairing() || this.isScanning()) && !this.state.waiting)  {
@@ -2542,7 +2634,7 @@ export class DevicePairingService  extends IncyclistService{
     async startPairing(adapters: AdapterInfo[], props: PairingProps) {
         if (this.isPairingSettled())  {
             if (this.usage==='page')
-                this.emit('pairing-done');
+                this.emit('pairing-done',{attemptId:undefined});
             return;
         }
 
@@ -2559,10 +2651,12 @@ export class DevicePairingService  extends IncyclistService{
         }
 
         const preparing = DevicePairingService.checkCounter++
-        this.state.check={preparing}   // will cause that next call to isPairing() will be true
+        const attemptId = preparing
+        const token = this.loopToken
+        this.state.check={id:attemptId, preparing}   // will cause that next call to isPairing() will be true
         this.state.interfaces = this.access.enrichWithAccessState(this.state.interfaces);
         
-        this.emit('pairing-start');
+        this.emit('pairing-start',{attemptId});
         
         const { isReady, busyRequired } = this.isReadyToPair();
 
@@ -2572,8 +2666,9 @@ export class DevicePairingService  extends IncyclistService{
 
             this.state.check.to = setTimeout(() => {
                 if (this.usage==='page') {
-                    this.emit('pairing-done')
-                    delete this.state.check
+                    this.emit('pairing-done',{attemptId})
+                    if (this.state.check?.id===attemptId)
+                        delete this.state.check
                     return;
                 }
 
@@ -2609,8 +2704,8 @@ export class DevicePairingService  extends IncyclistService{
 
         // every selected device is already connected for what it's requested for: nothing to start
         if (target.length===0) {
-            this.completeAttempt()
-            await this.retryUnsettledPairing()
+            this.completeAttempt(attemptId)
+            await this.retryUnsettledPairing(token)
             return
         }
 
@@ -2621,10 +2716,10 @@ export class DevicePairingService  extends IncyclistService{
         this.onPairingStarted();
         const attemptStartedAt = Date.now()
         const promise = this.rideService.startAdapters(selectedAdapters, 'pair');
-        this.state.check={promise}
+        this.state.check={id:attemptId, promise, udids:target.map(ai=>ai.udid), startedAt:attemptStartedAt}
 
 
-        this.logEvent({ message: 'Start Pairing', adapters, props });
+        this.logEvent({ message: 'Start Pairing', adapters, props, attemptId });
         let settled = true
         try {
             settled = await this.waitForAttempt(promise, target)
@@ -2639,9 +2734,9 @@ export class DevicePairingService  extends IncyclistService{
             return;
 
         if (!settled)
-            this.dropHungAttempt(target, attemptStartedAt)
+            this.dropHungAttempt(target, attemptStartedAt, attemptId)
 
-        await this.finishAttempt(target, adapters, props, settled)
+        await this.finishAttempt(target, adapters, props, settled, attemptId, token)
     }
 
     // resolves false if the attempt hasn't settled in time. A late result is then ignored.
@@ -2666,7 +2761,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     // stops tracking the attempt; the devices that didn't connect are stopped without waiting for them
-    protected dropHungAttempt(target:AdapterInfo[], attemptStartedAt:number):void {
+    protected dropHungAttempt(target:AdapterInfo[], attemptStartedAt:number, attemptId:number):void {
         if (!this.attemptHungLogged) {
             this.attemptHungLogged = true
             const hung = target.filter( ai=> !ai.adapter.isStarted())
@@ -2680,16 +2775,18 @@ export class DevicePairingService  extends IncyclistService{
             })
         }
 
-        this.rideService.dropPendingStart()
+        // the pending start is the one of this attempt only as long as the attempt is the current one
+        if (this.state.check?.id===attemptId)
+            this.rideService.dropPendingStart()
     }
 
-    protected async finishAttempt(target:AdapterInfo[], adapters:AdapterInfo[], props:PairingProps, settled:boolean) {
-        this.completeAttempt()
+    protected async finishAttempt(target:AdapterInfo[], adapters:AdapterInfo[], props:PairingProps, settled:boolean, attemptId:number, token:object) {
+        this.completeAttempt(attemptId)
 
         if (this.isPairingSettled())
             return
 
-        this.logEvent({ message: 'Pairing done', adapters, props });
+        this.logEvent({ message: 'Pairing done', adapters, props, attemptId });
 
         // only stop the devices of this attempt that didn't connect, never one that is connected.
         // A dropped attempt has already fired the stops of its devices: waiting for them could hang as well
@@ -2704,7 +2801,7 @@ export class DevicePairingService  extends IncyclistService{
             }
         }
 
-        await this.retryUnsettledPairing()
+        await this.retryUnsettledPairing(token)
     }
 
     // the selected devices that still need to be started: not started yet, or started for fewer
@@ -2728,21 +2825,25 @@ export class DevicePairingService  extends IncyclistService{
         return requested.some( c=> !started.includes(c))
     }
 
-    protected completeAttempt() {
+    protected completeAttempt(attemptId?:number) {
         this.checkCanStart()
 
-        if (this.state.check)
+        // only the attempt that created the record may clear it
+        if (this.state.check && (attemptId===undefined || this.state.check.id===attemptId))
             delete this.state.check
 
-        this.emit('pairing-done');
+        this.emit('pairing-done',{attemptId});
     }
 
     // page mode: the page's state machine schedules the next attempt
-    protected async retryUnsettledPairing() {
+    protected async retryUnsettledPairing(token?:object) {
         if (this.usage==='page' || this.isPairingSettled())
             return;
 
         await this.waitForRetry(this.getPairingRetryDelay());
+        // the visit that owned this loop has been left
+        if (token!==undefined && token!==this.loopToken)
+            return
         if (!this.state.scan)
             this.run().catch( err=>{ this.logError(err,'startPairing') })
     }
@@ -2833,19 +2934,22 @@ export class DevicePairingService  extends IncyclistService{
 
         if (this.isScanning()) {
             if (this.usage==='page')
-                this.emit('scanning-done')
+                this.emit('scanning-done',{scanId:undefined})
             return;
         }
 
         const isSearch = this.isSearchScan(props)
         if (isSearch && !this.prepareSearchScan()) {
             if (this.usage==='page')
-                this.emit('scanning-done')
+                this.emit('scanning-done',{scanId:undefined})
             return;
         }
 
         const preparing = DevicePairingService.scanCounter++
-        this.state.scan={preparing,adapters:[]}   // will cause that next call to isPairing() will be true
+        const scanId = preparing
+        const kind:ScanKind = this.getScanKind(isSearch,props)
+        const token = this.loopToken
+        this.state.scan={id:scanId, kind, preparing, adapters:[]}   // will cause that next call to isPairing() will be true
 
 
         if (interfaces.length===0) {
@@ -2854,7 +2958,7 @@ export class DevicePairingService  extends IncyclistService{
         }
 
 
-        this.emit('scanning-start')
+        this.emit('scanning-start',{scanId})
         this.emitStateChange({capabilities:this.state.capabilities})
 
         this.state.tsPrevStart = Date.now();
@@ -2867,7 +2971,13 @@ export class DevicePairingService  extends IncyclistService{
 
         await this.stopInterfacesForScan(interfaces, props)
 
-        this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
+        // the page was left (or the scan stopped) while the interfaces were being stopped: nothing starts anymore
+        if (this.state.scan?.id!==scanId) {
+            this.logEvent({message:'scan dropped before start', scanId})
+            return
+        }
+
+        this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props, scanId})
         this.initScanningCallbacks()
 
         let timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
@@ -2876,24 +2986,33 @@ export class DevicePairingService  extends IncyclistService{
         interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
                             .map(i=>i.name)
         const promise = this.access.scan({interfaces,excludeDisabled:true},{includeKnown:props.enforcedScan, timeout, timeoutAllInterfaces:isSearch})
-        this.state.scan = {promise, adapters:[]}
+        this.state.scan = {id:scanId, kind, promise, adapters:[]}
         this.onPairingStarted()
 
-        await this.awaitScanPromise(promise)
+        await this.awaitScanPromise(promise, scanId)
+        await this.onScanEnded(props, scanId, isSearch, token)
 
-        if (isSearch)
+    }
+
+    protected async onScanEnded(props: PairingProps, scanId:number, isSearch:boolean, token:object) {
+        // a newer scan has replaced this one: its owner continues
+        const superseded = this.isScanning()
+        if (isSearch && !superseded)
             this.onSearchScanDone()
 
-        this.emit('scanning-done')
+        this.emit('scanning-done',{scanId})
         this.emitStateChange({capabilities:this.state.capabilities})
 
+        if (this.usage==='page' || superseded || token!==this.loopToken)
+            return
 
-        if (this.usage==='page') {
-            return;
-        }
+        await this.restartAfterScan(props, scanId, token)
+    }
 
-        await this.restartAfterScan(props)
-
+    protected getScanKind(isSearch:boolean, props:PairingProps):ScanKind {
+        if (isSearch)
+            return 'search'
+        return props.enforcedScan ? 'enforced' : 'deviceList'
     }
 
     protected scheduleScanRetryWhenNoInterfaces(preparing: number) {
@@ -2903,8 +3022,9 @@ export class DevicePairingService  extends IncyclistService{
         this.state.scanTo = setTimeout(() => {
             delete this.state.scanTo
             if (this.usage==='page') {
-                this.emit('scanning-done')
-                delete this.state.scan
+                this.emit('scanning-done',{scanId:undefined})
+                if (this.state.scan?.id===preparing)
+                    delete this.state.scan
                 return;
             }
 
@@ -2923,10 +3043,10 @@ export class DevicePairingService  extends IncyclistService{
         this.deregisterScanningDataHandlers()
     }
 
-    protected async awaitScanPromise(promise: Promise<DeviceSettings[]>) {
+    protected async awaitScanPromise(promise: Promise<DeviceSettings[]>, scanId?:number) {
         try {
             await promise
-            this.cleanupScan()
+            this.cleanupScan(scanId)
             this.checkCanStart()
 
         }
@@ -2935,13 +3055,15 @@ export class DevicePairingService  extends IncyclistService{
         }
     }
 
-    protected async restartAfterScan(props: PairingProps) {
+    protected async restartAfterScan(props: PairingProps, scanId?:number, token?:object) {
         // after timeout, re-start to either trigger pairing or scan again
         // we don't do this for enforced scans, as the don't have timeouts, i.e. are always trigger manually
         if (!props.enforcedScan) {
 
-            this.cleanupScan()
+            this.cleanupScan(scanId)
             await sleep(500)
+            if (token!==undefined && token!==this.loopToken)
+                return
             this.run().catch( err=>{ this.logError(err,'startScanning') })
         }
     }
@@ -2963,7 +3085,10 @@ export class DevicePairingService  extends IncyclistService{
         delete this.state.scan.adapters
     }
 
-    protected cleanupScan() {
+    protected cleanupScan(scanId?:number) {
+        // a scan of an earlier visit must not clean up the one that follows
+        if (scanId!==undefined && this.state?.scan && this.state.scan.id!==scanId)
+            return
         this.deregisterScanningDataHandlers()
         if (this.state?.scan)
             delete this.state.scan;

@@ -27,9 +27,20 @@ export class PairingPageStateMachine {
     protected pairingPromise: Promise<void>|undefined
     protected scanningPromise: Promise<void>|undefined
 
-
-
-
+    // Session token: incremented by start(), stop() and pause(). Every continuation (await, timer, promise
+    // callback) that outlives the call that created it captures the value and drops itself if the session
+    // has ended meanwhile, so a leave can never be followed by work from the visit that was left.
+    protected epoch: number = 0
+    protected stoppedAt: number|undefined
+    // the stopPairing()/stopScanning() call of this session; the selection timeout and the list close share it
+    protected stopWorkPromise: Promise<void>|undefined
+    // kept across pause() so that resume() can open the session again
+    protected resumeCallback: (()=>void)|undefined
+    // the attempt and the scan this session is waiting for: events of any other one are ignored
+    protected currentAttemptId: number|undefined
+    protected currentScanId: number|undefined
+    // the attempt was started by a visit before this one
+    protected adoptedAttempt = false
 
     constructor() {
         this.logger = new EventLogger('PairingPageState')
@@ -49,10 +60,13 @@ export class PairingPageStateMachine {
                 return;
             }
 
+            this.epoch++
             this.stateChangeCallback = callback
+            this.resumeCallback = callback
             this.registerServiceEventHandlers()
             this.setState('Idle')
-            this.logIncomingEvent('start()',undefined,'Idle')
+            this.adoptWorkInFlight()
+            this.logIncomingEvent('start()',undefined,this.state)
 
         }
         catch(err) {
@@ -62,18 +76,9 @@ export class PairingPageStateMachine {
     stop() {     
         try {
             const prev = this.state
-            this.unregisterServiceEventHandlers()
-            delete this.stateChangeCallback
-
-            this.resetTimeouts()
-            // drop any in-flight markers from this session - a stale, still-pending
-            // startPairing()/startScanning() promise from a previous session must not
-            // block a fresh performCheck() after the next start()
-            delete this.pairingPromise
-            delete this.scanningPromise
-            this.setState('Closed')
+            this.closeSession()
+            delete this.resumeCallback
             this.logIncomingEvent('stop',prev,'Closed')
-
         } 
         catch(err) {
             this.logError(err,'stop')
@@ -81,32 +86,97 @@ export class PairingPageStateMachine {
         }
     }
 
+    // What the visit before left running decides where this session begins (see 4.4 of the design):
+    // a running attempt is adopted, anything else starts from Idle.
+    protected adoptWorkInFlight() {
+        const service = this.getDevicePairing()
+        const activity = service.getActivity?.()
+        if (!activity)
+            return
+
+        if (activity.pairing) {
+            this.currentAttemptId = activity.pairing.attemptId
+            this.adoptedAttempt = true
+            this.setState('Pairing')
+        }
+        else if (activity.scanning) {
+            // the leave stops scans, so this is not expected: treat it like a stop that has not finished
+            this.logger.logEvent({message:'scan still running on start', scanId:activity.scanning.scanId, kind:activity.scanning.kind})
+            service.stopScanning().catch( err=>{ this.logError(err,'start') })
+        }
+    }
+
+    // Ends the session: nothing of it may run again. Device work is owned by the pairing service and is
+    // not touched here.
+    protected closeSession() {
+        this.epoch++
+        this.stoppedAt = Date.now()
+        this.unregisterServiceEventHandlers()
+        delete this.stateChangeCallback
+        delete this.selectStateChangeCallback
+
+        this.resetTimeouts()
+        this.stopDeviceSelectionTimeout()
+        this._selectState = 'Closed'
+
+        // drop any in-flight markers from this session - a stale, still-pending
+        // startPairing()/startScanning() promise from a previous session must not
+        // block a fresh performCheck() after the next start()
+        delete this.pairingPromise
+        delete this.scanningPromise
+        delete this.stopWorkPromise
+        delete this.currentAttemptId
+        delete this.currentScanId
+        this.adoptedAttempt = false
+        this.setState('Closed')
+    }
+
     async pause() {
         const prev = this._state
         const service = this.getDevicePairing()
 
-        if (this.state==='Pairing') {
+        // the session ends right away, the device work is stopped afterwards
+        this.closeSession()
+        this.logIncomingEvent('pause',prev,this.state)
+
+        if (prev==='Pairing') {
             await service.stopPairing()
         }
-        else if (this.state==='Scanning' ) {
+        else if (prev==='Scanning' ) {
             await service.stopScanning()
         }
         await service.stop([], true)
-
-        this.resetTimeouts()
-        this.setState('Closed')      
-        
-        this.logIncomingEvent('pause',prev,this.state)
-
-        
-        
     }
 
+    // pause() and resume() are stop() and start(): the page is entered again like a new visit
     resume() {
         const prev = this._state
-        this.setState('Idle')
-        this.logIncomingEvent('resume',prev,this.state)
+        if (prev!=='Closed' || !this.resumeCallback) 
+            return
 
+        this.start(this.resumeCallback)
+        this.logIncomingEvent('resume',prev,this.state)
+    }
+
+    // true if the continuation that captured `epoch` belongs to a session that has ended
+    protected isStale( epoch:number, fn:string):boolean {
+        if (epoch===this.epoch && this._state!=='Closed')
+            return false
+
+        this.logger.logEvent({message:'stale continuation dropped', fn, msSinceStop: this.stoppedAt===undefined ? -1 : Date.now()-this.stoppedAt})
+        return true
+    }
+
+    protected stopWork( stopFn:()=>Promise<void> ):Promise<void> {
+        if (this.stopWorkPromise!==undefined)
+            return this.stopWorkPromise
+
+        const promise:Promise<void> = Promise.resolve(stopFn()).finally( ()=>{
+            if (this.stopWorkPromise===promise)
+                delete this.stopWorkPromise
+        })
+        this.stopWorkPromise = promise
+        return promise
     }
 
     protected setState(state:PageState) {
@@ -169,6 +239,10 @@ export class PairingPageStateMachine {
     }
 
     onPageReady() {
+        // the attempt of the visit before is running: nothing to start
+        if (this.state==='Pairing' && this.adoptedAttempt)
+            return
+
         if (this.state!=='Idle') {
             this.logError( new Error('Illegal state'),'onPageStartedEventHandler')
             return;
@@ -247,9 +321,10 @@ export class PairingPageStateMachine {
             // the state machine could end up with several overlapping pairing attempts
             // racing each other and get stuck in 'Pairing' forever.
             this.setState('Pairing')
-            this.pairingPromise = Promise.resolve(service.startPairing(adapters, {}))
+            const promise:Promise<void> = Promise.resolve(service.startPairing(adapters, {}))
                 .catch( err=>{ this.logError(err,'startPairing') })
-                .finally( ()=>{ delete this.pairingPromise })
+                .finally( ()=>{ if (this.pairingPromise===promise) delete this.pairingPromise })
+            this.pairingPromise = promise
         }
     }
 
@@ -258,13 +333,25 @@ export class PairingPageStateMachine {
             // same overlap guard as above, applied to startScanning()
             this.setState('Scanning')
             const props = this.selectState==='Active' ? {deviceList:true} : {}
-            this.scanningPromise = Promise.resolve(service.startScanning(adapters, props))
+            const promise:Promise<void> = Promise.resolve(service.startScanning(adapters, props))
                 .catch( err=>{ this.logError(err,'startScanning') })
-                .finally( ()=>{ delete this.scanningPromise })
+                .finally( ()=>{ if (this.scanningPromise===promise) delete this.scanningPromise })
+            this.scanningPromise = promise
         }
     }
 
-    protected onPairingStarted() {
+    // events of an attempt or scan this session does not wait for (an older one) are dropped
+    protected isForeign( event:string, id:number|undefined, current:number|undefined):boolean {
+        if (id===undefined || id===current)
+            return false
+        this.logger.logEvent({message:'foreign attempt event ignored', event, attemptId:id})
+        return true
+    }
+
+    protected onPairingStarted(payload?:{attemptId?:number}) {
+        if (payload?.attemptId!==undefined && this.state==='Pairing')
+            this.currentAttemptId = payload.attemptId
+
         // nothing to do for now just verify we are in the expected state
         if (this.state!=='Pairing') {
             this.logError( new Error('Illegal state'),'onPairingStarted')
@@ -273,7 +360,11 @@ export class PairingPageStateMachine {
         this.sendUpdate()
 
     }
-    protected onPairingFinished() {
+    protected onPairingFinished(payload?:{attemptId?:number}) {
+        if (this.state==='Closed' || this.isForeign('pairing-done', payload?.attemptId, this.currentAttemptId))
+            return
+        delete this.currentAttemptId
+        this.adoptedAttempt = false
         const prev = this.state
         this.setState('Idle')
 
@@ -292,6 +383,7 @@ export class PairingPageStateMachine {
         else {
             this.logger.logEvent( {message:'setup retry timeout', delay:PAIRING_RETRY_DELAY})
 
+            this.resetTimeouts()
             this.retryTimeout = setTimeout( ()=>{
                 this.onRetry(prev)
             },PAIRING_RETRY_DELAY )
@@ -306,7 +398,10 @@ export class PairingPageStateMachine {
             this.stateChangeCallback()        
     }
 
-    protected onScanningStarted() {      
+    protected onScanningStarted(payload?:{scanId?:number}) {      
+        if (payload?.scanId!==undefined && this.state==='Scanning')
+            this.currentScanId = payload.scanId
+
         // nothing to do for now just verify we are in the expected state
         if (this.state!=='Scanning') {
             this.logError( new Error('Illegal state'),'onScanningStarted')
@@ -314,11 +409,14 @@ export class PairingPageStateMachine {
         }
     }
 
-    protected onScanningFinished() {
+    protected onScanningFinished(payload?:{scanId?:number}) {
+        if (this.state==='Closed' || this.isForeign('scanning-done', payload?.scanId, this.currentScanId))
+            return
+        delete this.currentScanId
         const prev = this.state
 
-
         this.setState('Idle')
+        this.resetTimeouts()
         this.retryTimeout = setTimeout( ()=>{
             this.onRetry( prev)
         },SCANNING_RETRY_DELAY )
@@ -340,7 +438,8 @@ export class PairingPageStateMachine {
 
 
     onDeviceSelectionOpened( onSelectionStateChanged:()=>void) {
-
+        if (this.state==='Closed')
+            return
 
         if (this.state==='Pairing' )  {
             this.startDeviceSelectionTimeout()
@@ -358,20 +457,24 @@ export class PairingPageStateMachine {
     }
 
     async onDeviceSelectionClosed() {
-
+        const epoch = this.epoch
         const prev = this.state
         this._selectState = 'Closed'
         delete this.selectStateChangeCallback
         this.stopDeviceSelectionTimeout()
 
         if (this.state==='Pairing' )  {
-            await this.getDevicePairing().stopPairing()
+            await this.stopWork( ()=>this.getDevicePairing().stopPairing() )
+            if (this.isStale(epoch,'onDeviceSelectionClosed')) return
             this.setState('Idle')
         }
         else if (this.state==='Scanning' )  {
-            await this.getDevicePairing().stopScanning()
+            await this.stopWork( ()=>this.getDevicePairing().stopScanning() )
+            if (this.isStale(epoch,'onDeviceSelectionClosed')) return
             this.setState('Idle')
         }
+        else if (this.state==='Closed')
+            return
 
         this.logIncomingEvent('list-close',prev, this.state)
         this.performCheck()
@@ -392,6 +495,7 @@ export class PairingPageStateMachine {
 
 
     async onDeviceSelectionTimeout    () {
+        const epoch = this.epoch
         this.stopDeviceSelectionTimeout()
 
         this.logIncomingEvent('list-timeout',this.state, this.state)
@@ -404,7 +508,8 @@ export class PairingPageStateMachine {
             // capability) still hasn't finished - abandon it and honour the user's request to
             // see devices for the capability they opened instead. It isn't lost: the normal
             // retry cycle (see onPairingFinished()) picks it up again once we're back at 'Idle'.
-            await this.getDevicePairing().stopPairing()
+            await this.stopWork( ()=>this.getDevicePairing().stopPairing() )
+            if (this.isStale(epoch,'onDeviceSelectionTimeout')) return
             this._selectState = 'Active'
             this.performCheck()
         }

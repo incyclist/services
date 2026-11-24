@@ -10,6 +10,7 @@ import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType, St
 import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceRide } from "../../devices/ride";
 import { useDeviceConfiguration } from "../../devices/configuration";
 import { usePairingVisitTracker } from "../../devices/page/base/visit-log-factory";
+import { useDevicePairing } from "../../devices/pairing";
 import { useUserSettings } from "../../settings";
 import { CyclingMode, DeviceData, IncyclistCapability, UpdateRequest } from "incyclist-devices";
 import { formatDateTime, getLegacyInterface, waitNextTick } from "../../utils";
@@ -64,6 +65,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected discarding = false
     /** guards the one-time RideModeService.onStartDevicesReady() call */
     protected controlDevicesReadyNotified: boolean = false
+
+    // for the start overlay devices snapshot
+    protected cntRidesStarted = 0
+    protected tsLastRideStart: number|undefined
+    protected tsLastRideStop: number|undefined
 
     // --- start overlay v2 ---
 
@@ -125,6 +131,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             }
             this.notifyPairingVisitRideStarted(simulate)
             this.resetStartTracking()
+            this.logDevicesSnapshot(simulate)
 
             const rideProps =  this.getRideModeService().getLogProps()
             this.logEvent({ message: 'Start ride', ...rideProps,
@@ -157,6 +164,46 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     isSimulated(): boolean {
         return this.simulated
+    }
+
+    // The state of the devices when the start overlay opens, before the ride start touches them. Adapter level
+    // only: it shows what the Pairing page left behind.
+    protected logDevicesSnapshot(simulate?:boolean) {
+        try {
+            const pairing = this.getDevicePairing()
+            const activity = pairing.getActivity()
+            const readyToStart = pairing.isReadyToStart()
+            const lastExit = this.getPairingVisitTracker().getLastExit()
+            const now = Date.now()
+
+            // a Pairing exit that came after the previous ride start belongs to this start
+            const exitIsNew = lastExit!==undefined && (this.tsLastRideStart===undefined || now-lastExit.ageMs>this.tsLastRideStart)
+            let startFlow = 'unknown'
+            if (simulate)
+                startFlow = 'pairing-simulate'
+            else if (exitIsNew && lastExit.via==='ok')
+                startFlow = 'pairing-ok'
+            else if (readyToStart)
+                startFlow = 'direct'
+
+            this.logEvent({
+                message:'start overlay devices snapshot',
+                ...this.getDeviceRide().getDeviceSnapshot(),
+                readyToStart,
+                pairingAttemptActive: activity.pairing!==undefined,
+                pairingScanActive: activity.scanning!==undefined,
+                startFlow,
+                lastPairingExit: lastExit?.via ?? 'none',
+                msSincePairingExit: lastExit?.ageMs ?? -1,
+                ridesStartedInSession: this.cntRidesStarted,
+                msSinceLastRideStop: this.tsLastRideStop===undefined ? -1 : now-this.tsLastRideStop,
+            })
+        }
+        catch(err) {
+            this.logError(err,'logDevicesSnapshot')
+        }
+        this.cntRidesStarted++
+        this.tsLastRideStart = Date.now()
     }
 
     protected notifyPairingVisitRideStarted(simulate?:boolean) {
@@ -740,6 +787,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 return;
             }
 
+            this.tsLastRideStop = Date.now()
             this.stopDevices(props.exit)
             this.displayService.stop().catch( err=>{ this.logError(err,'stopRide') })
 
@@ -1341,8 +1389,22 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         if (exit)
             this.getDeviceRide().stop().catch( err=>{ this.logError(err,'stopDevices') })
-        else
+        else {
+            this.resetReadyToStartIfDisconnected()
             this.getDeviceRide().pause()
+        }
+    }
+
+    // a ride that is left with its control device gone must not skip the Pairing page at the next start
+    protected resetReadyToStartIfDisconnected() {
+        try {
+            const control = this.getDeviceRide().getDisconnectedControl()
+            if (control)
+                this.getDevicePairing().resetReadyToStart({controlName:control.name, controlAdapterStarted:control.started, controlAdapterStopped:control.stopped})
+        }
+        catch(err) {
+            this.logError(err,'resetReadyToStartIfDisconnected')
+        }
     }
 
     protected initDeviceHandlers() {
@@ -2063,6 +2125,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     @Injectable
     protected getRideViewRestriction() {
         return useRideViewRestriction()
+    }
+
+    @Injectable
+    protected getDevicePairing() {
+        return useDevicePairing()
     }
 
     @Injectable

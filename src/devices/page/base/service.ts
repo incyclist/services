@@ -49,6 +49,11 @@ export abstract class PairingPageService extends IncyclistPageService {
     // never set it - only a confirmed real device should.
     protected handingOffToRide: boolean = false
 
+    // true between openPage() and the first closePage(): a button exit closes the page from moveTo() and
+    // again from the platform's unmount hook, only the first close may act
+    protected isOpen: boolean = false
+    protected closeIgnoredLogged: boolean = false
+
     protected guidance: PairingGuidance
     protected onPairingStateHandler = this.onPairingState.bind(this)
     protected onExclusionRevertedHandler = this.onExclusionReverted.bind(this)
@@ -103,6 +108,8 @@ export abstract class PairingPageService extends IncyclistPageService {
             this.logEvent({message:'page shown', page:'Pairing', forRide})
             this.isPairingForRide = forRide??false
             this.handingOffToRide = false
+            this.isOpen = true
+            this.closeIgnoredLogged = false
             this.openVisit()
             this.listenToPairingState(true)
 
@@ -151,6 +158,15 @@ export abstract class PairingPageService extends IncyclistPageService {
     }
 
     closePage() {
+        if (!this.isOpen) {
+            if (!this.closeIgnoredLogged) {
+                this.closeIgnoredLogged = true
+                this.logEvent({message:'page close ignored', page:'Pairing'})
+            }
+            return
+        }
+        this.isOpen = false
+
         try {
             this.logEvent({message:'page closed', page:'Pairing'})
             this.isVisitOpen = false
@@ -737,8 +753,16 @@ export abstract class PairingPageService extends IncyclistPageService {
             g.setDeviceListOpen(this.openedCapability!==undefined)
         }, 'openVisit')
         // whichever way the visit ends - also by app exit - its exit event carries the guidance fields
-        this.trackVisit( t=>t.setExitFields( ()=>({...this.guidance.getExitFields()}) ), 'openVisit')
+        this.trackVisit( t=>t.setExitFields( ()=>({...this.guidance.getExitFields(), inFlight:this.getInFlight()}) ), 'openVisit')
         this.isVisitOpen = true
+    }
+
+    // what the pairing service is still doing at the moment the page is left
+    protected getInFlight():'pairing'|'scanning'|'none' {
+        const activity = this.getDevicePairing().getActivity?.()
+        if (activity?.pairing)
+            return 'pairing'
+        return activity?.scanning ? 'scanning' : 'none'
     }
 
     protected closeVisit(via:PairingExitVia):void {

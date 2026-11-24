@@ -25,6 +25,23 @@ export interface AdapterStateInfo {
     isStarted:boolean
 }
 
+/**
+ * Adapter level state of the devices at a moment in time (not the state of a ride start).
+ * Only primitives, so it can be logged as is.
+ */
+export interface DeviceSnapshot {
+    controlName: string
+    controlInterface: string
+    isSimulator: boolean
+    controlAdapterStarted: boolean
+    controlAdapterPaused: boolean
+    controlAdapterStopped: boolean
+    cntSensors: number
+    cntSensorsStarted: number
+    // name:started|paused|stopped|idle, joined by ';'
+    sensorStates: string
+}
+
 export interface LegacyRoute {
     get():RouteApiDetail
     isLap():boolean

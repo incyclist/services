@@ -80,6 +80,7 @@ interface OnDataHandlersMap   {[index: string]: (...args)=>void}
 export class DeviceAccessService  extends IncyclistService{
     protected interfaces: InterfaceList = {}
     protected scanState: InternalScanState
+    protected scanPromise: Promise<DeviceSettings[]>|undefined
     protected defaultProps:InterfaceAccessProps
 
     constructor() {
@@ -499,6 +500,24 @@ export class DeviceAccessService  extends IncyclistService{
      * @param props.includeKnown report devices again that were already reported during this scan
      */
     async scan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean,timeoutAllInterfaces?:boolean }={} ): Promise<DeviceSettings[]> {
+        // a second request joins the running scan and gets its result (S4)
+        if (this.scanPromise!==undefined) {
+            this.logEvent({message:'scan joined', requestedBy:'scan'})
+            return this.scanPromise
+        }
+
+        const promise = this.runScan(filter,props)
+        this.scanPromise = promise
+        try {
+            return await promise
+        }
+        finally {
+            if (this.scanPromise===promise)
+                delete this.scanPromise
+        }
+    }
+
+    protected async runScan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean,timeoutAllInterfaces?:boolean }={} ): Promise<DeviceSettings[]> {
         this.logEvent({message:'device scan start', filter,props} )
         const detected = [];
         const onDataHandlers:OnDataHandlersMap  = {}
