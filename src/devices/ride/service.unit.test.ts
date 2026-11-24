@@ -454,6 +454,120 @@ describe('DeviceRideService',()=>{
 
                 expect(ai.isRestarting).toBe(false)
             })
+
+            describe('several adapters on the same interface',()=>{
+                type Reconnect = { reconnectInterface: (ifName:string, adapters:AdapterRideInfo[])=>Promise<void> }
+
+                const createAntInfo = (udid:string):AdapterRideInfo => {
+                    const ai = createInfo(udid)
+                    ;(ai.adapter.getInterface as jest.Mock).mockReturnValue('ant')
+                    return ai
+                }
+
+                // a device that failed earlier: its health check is stopped (isHealthy is deleted) and the restart loop is running
+                const inRestartLoop = (ai:AdapterRideInfo) => {
+                    ai.isRestarting = true
+                    delete ai.isHealthy
+                }
+
+                let reconnectInterface: jest.Mock
+
+                beforeEach( ()=>{
+                    reconnectInterface = jest.fn().mockResolvedValue(undefined)
+                    ;(service as unknown as Reconnect).reconnectInterface = reconnectInterface
+                    service.startHealthCheck = jest.fn()
+                })
+
+                test('last adapter fails while the others are still in their restart loop: restarts the interface',async ()=>{
+                    const [ai1,ai2,ai3] = [createAntInfo('1'),createAntInfo('2'),createAntInfo('3')]
+                    inRestartLoop(ai1)
+                    inRestartLoop(ai2)
+                    ;(service as unknown as ServiceInternals).rideAdapters = [ai1,ai2,ai3]
+                    setLastData(service, ai3)
+
+                    await service.prepareReconnect(ai3)
+
+                    expect(reconnectInterface).toHaveBeenCalledWith('ant',[ai1,ai2,ai3])
+                    expect(ai3.adapter.restart).not.toHaveBeenCalled()
+                })
+
+                test('another adapter is still delivering data: restarts only the failed adapter',async ()=>{
+                    const [ai1,ai2,ai3] = [createAntInfo('1'),createAntInfo('2'),createAntInfo('3')]
+                    ai1.isHealthy = true
+                    inRestartLoop(ai2)
+                    ;(service as unknown as ServiceInternals).rideAdapters = [ai1,ai2,ai3]
+                    setLastData(service, ai3)
+
+                    await service.prepareReconnect(ai3)
+
+                    expect(reconnectInterface).not.toHaveBeenCalled()
+                    expect(ai3.adapter.restart).toHaveBeenCalledTimes(1)
+                })
+
+                test('only one adapter on the interface: restarts only that adapter',async ()=>{
+                    const ai = createAntInfo('1')
+                    ;(service as unknown as ServiceInternals).rideAdapters = [ai]
+                    setLastData(service, ai)
+
+                    await service.prepareReconnect(ai)
+
+                    expect(reconnectInterface).not.toHaveBeenCalled()
+                    expect(ai.adapter.restart).toHaveBeenCalledTimes(1)
+                })
+            })
+        })
+
+        describe('reconnectInterface',()=>{
+            type Internals = {
+                reconnectInterface: (ifName:string, adapters:AdapterRideInfo[])=>Promise<void>
+                stopAllAdaptersOnInterface: unknown
+                performInterfaceReconnect: unknown
+                reconnectAdapters: unknown
+            }
+
+            let internals: Internals
+            let stopAll: jest.Mock
+
+            beforeEach( ()=>{
+                internals = service as unknown as Internals
+                stopAll = jest.fn().mockResolvedValue(undefined)
+                internals.stopAllAdaptersOnInterface = stopAll
+                internals.performInterfaceReconnect = jest.fn().mockResolvedValue(undefined)
+                internals.reconnectAdapters = jest.fn().mockResolvedValue(undefined)
+            })
+
+            test('restarts the interface and its adapters',async ()=>{
+                const ai = createInfo('1')
+
+                await internals.reconnectInterface('ant',[ai])
+
+                expect(stopAll).toHaveBeenCalledWith('ant')
+                expect(internals.performInterfaceReconnect).toHaveBeenCalledWith('ant')
+                expect(internals.reconnectAdapters).toHaveBeenCalledWith([ai],'ant')
+            })
+
+            test('a stop request during the restart still allows a later interface restart',async ()=>{
+                const ai = createInfo('1')
+                stopAll.mockImplementationOnce( async ()=>{ service.emit('stop-ride') })
+
+                await internals.reconnectInterface('ant',[ai])
+                expect(internals.performInterfaceReconnect).not.toHaveBeenCalled()
+
+                await internals.reconnectInterface('ant',[ai])
+
+                expect(internals.performInterfaceReconnect).toHaveBeenCalledTimes(1)
+            })
+
+            test('simulator: does nothing and does not block a later restart',async ()=>{
+                const ai = createInfo('1')
+
+                await internals.reconnectInterface('simulator',[ai])
+                expect(stopAll).not.toHaveBeenCalled()
+
+                await internals.reconnectInterface('ant',[ai])
+
+                expect(stopAll).toHaveBeenCalledTimes(1)
+            })
         })
 
         describe('no-data watchdog',()=>{
