@@ -36,6 +36,11 @@ export class PairingPageStateMachine {
     protected stopWorkPromise: Promise<void>|undefined
     // kept across pause() so that resume() can open the session again
     protected resumeCallback: (()=>void)|undefined
+    // the attempt and the scan this session is waiting for: events of any other one are ignored
+    protected currentAttemptId: number|undefined
+    protected currentScanId: number|undefined
+    // the attempt was started by a visit before this one
+    protected adoptedAttempt = false
 
     constructor() {
         this.logger = new EventLogger('PairingPageState')
@@ -60,7 +65,8 @@ export class PairingPageStateMachine {
             this.resumeCallback = callback
             this.registerServiceEventHandlers()
             this.setState('Idle')
-            this.logIncomingEvent('start()',undefined,'Idle')
+            this.adoptWorkInFlight()
+            this.logIncomingEvent('start()',undefined,this.state)
 
         }
         catch(err) {
@@ -77,6 +83,26 @@ export class PairingPageStateMachine {
         catch(err) {
             this.logError(err,'stop')
 
+        }
+    }
+
+    // What the visit before left running decides where this session begins (see 4.4 of the design):
+    // a running attempt is adopted, anything else starts from Idle.
+    protected adoptWorkInFlight() {
+        const service = this.getDevicePairing()
+        const activity = service.getActivity?.()
+        if (!activity)
+            return
+
+        if (activity.pairing) {
+            this.currentAttemptId = activity.pairing.attemptId
+            this.adoptedAttempt = true
+            this.setState('Pairing')
+        }
+        else if (activity.scanning) {
+            // the leave stops scans, so this is not expected: treat it like a stop that has not finished
+            this.logger.logEvent({message:'scan still running on start', scanId:activity.scanning.scanId, kind:activity.scanning.kind})
+            service.stopScanning().catch( err=>{ this.logError(err,'start') })
         }
     }
 
@@ -99,6 +125,9 @@ export class PairingPageStateMachine {
         delete this.pairingPromise
         delete this.scanningPromise
         delete this.stopWorkPromise
+        delete this.currentAttemptId
+        delete this.currentScanId
+        this.adoptedAttempt = false
         this.setState('Closed')
     }
 
@@ -210,6 +239,10 @@ export class PairingPageStateMachine {
     }
 
     onPageReady() {
+        // the attempt of the visit before is running: nothing to start
+        if (this.state==='Pairing' && this.adoptedAttempt)
+            return
+
         if (this.state!=='Idle') {
             this.logError( new Error('Illegal state'),'onPageStartedEventHandler')
             return;
@@ -307,7 +340,18 @@ export class PairingPageStateMachine {
         }
     }
 
-    protected onPairingStarted() {
+    // events of an attempt or scan this session does not wait for (an older one) are dropped
+    protected isForeign( event:string, id:number|undefined, current:number|undefined):boolean {
+        if (id===undefined || id===current)
+            return false
+        this.logger.logEvent({message:'foreign attempt event ignored', event, attemptId:id})
+        return true
+    }
+
+    protected onPairingStarted(payload?:{attemptId?:number}) {
+        if (payload?.attemptId!==undefined && this.state==='Pairing')
+            this.currentAttemptId = payload.attemptId
+
         // nothing to do for now just verify we are in the expected state
         if (this.state!=='Pairing') {
             this.logError( new Error('Illegal state'),'onPairingStarted')
@@ -316,9 +360,11 @@ export class PairingPageStateMachine {
         this.sendUpdate()
 
     }
-    protected onPairingFinished() {
-        if (this.state==='Closed')
+    protected onPairingFinished(payload?:{attemptId?:number}) {
+        if (this.state==='Closed' || this.isForeign('pairing-done', payload?.attemptId, this.currentAttemptId))
             return
+        delete this.currentAttemptId
+        this.adoptedAttempt = false
         const prev = this.state
         this.setState('Idle')
 
@@ -352,7 +398,10 @@ export class PairingPageStateMachine {
             this.stateChangeCallback()        
     }
 
-    protected onScanningStarted() {      
+    protected onScanningStarted(payload?:{scanId?:number}) {      
+        if (payload?.scanId!==undefined && this.state==='Scanning')
+            this.currentScanId = payload.scanId
+
         // nothing to do for now just verify we are in the expected state
         if (this.state!=='Scanning') {
             this.logError( new Error('Illegal state'),'onScanningStarted')
@@ -360,9 +409,10 @@ export class PairingPageStateMachine {
         }
     }
 
-    protected onScanningFinished() {
-        if (this.state==='Closed')
+    protected onScanningFinished(payload?:{scanId?:number}) {
+        if (this.state==='Closed' || this.isForeign('scanning-done', payload?.scanId, this.currentScanId))
             return
+        delete this.currentScanId
         const prev = this.state
 
         this.setState('Idle')

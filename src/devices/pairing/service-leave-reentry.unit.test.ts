@@ -11,9 +11,7 @@ import { DevicePairingService } from './service'
  * the previous visit is still running. 'page' is the mobile mode (driven by the page state machine),
  * 'direct' is the desktop mode (the service runs its own loop).
  *
- * Tests named `today:` pin the current behaviour, including behaviour that is wrong. Tests wrapped in
- * `test.failing` describe the intended behaviour and are known defects: they are reported as passing
- * while the defect exists. The fixing change flips them to plain `test`.
+ * Leaving stops scans and keeps a running attempt, re-entering adopts it; nothing new starts after a leave.
  *
  * The fakes below do not model what the real ride service does with a cancelled start: they only
  * count calls. Assertions are therefore about which calls the pairing service makes, not about the
@@ -190,16 +188,7 @@ describe('DevicePairingService: leaving and re-entering the Pairing page', () =>
             expect(env.ride.started.has(trainer)).toBe(true)
         })
 
-        test('today: after leaving, the service no longer knows about the running attempt (known defect R3)', async () => {
-            await withAttemptInFlight()
-
-            await env.leave()
-
-            expect(env.ride.inFlight).toBe(1)
-            expect(env.isPairing()).toBe(false)
-        })
-
-        test.failing('known defect R3: the service keeps its record of an attempt that is still running', async () => {
+        test('the service keeps its record of an attempt that is still running', async () => {
             await withAttemptInFlight()
 
             await env.leave()
@@ -208,17 +197,7 @@ describe('DevicePairingService: leaving and re-entering the Pairing page', () =>
             expect(env.isPairing()).toBe(true)
         })
 
-        test('today: re-entering while the old attempt is running starts a second attempt (known defect R3)', async () => {
-            const trainer = await withAttemptInFlight()
-            await env.leave()
-
-            await env.enter()
-            await jest.advanceTimersByTimeAsync(100)
-
-            expect(env.attemptsFor(trainer)).toBe(2)
-        })
-
-        test.failing('known defect R3: re-entering while the old attempt is running adopts it, no second attempt', async () => {
+        test('re-entering while the old attempt is running adopts it, no second attempt', async () => {
             const trainer = await withAttemptInFlight()
             await env.leave()
 
@@ -228,20 +207,52 @@ describe('DevicePairingService: leaving and re-entering the Pairing page', () =>
             expect(env.attemptsFor(trainer)).toBe(1)
         })
 
-        test('today: leaving does not stop a scan that is running (known defect D6)', async () => {
-            await withScanInFlight()
-
-            await env.leave()
-
-            expect(env.access.stopScan).not.toHaveBeenCalled()
-        })
-
-        test.failing('known defect D6: leaving stops a scan that is running', async () => {
+        test('leaving stops a scan that is running', async () => {
             await withScanInFlight()
 
             await env.leave()
 
             expect(env.access.stopScan).toHaveBeenCalled()
+        })
+
+        test('getActivity() reports a running attempt with its id, and nothing once it has finished', async () => {
+            await withAttemptInFlight()
+
+            expect(env.pairing.getActivity().pairing).toMatchObject({ attemptId: expect.any(Number) })
+
+            await jest.advanceTimersByTimeAsync(2000)
+
+            expect(env.pairing.getActivity().pairing).toBeUndefined()
+        })
+
+        test('the attempt finishing after the leave does not clear the record of the attempt that followed it', async () => {
+            const trainer = await withAttemptInFlight()
+            await env.leave()
+            await env.enter()
+            await jest.advanceTimersByTimeAsync(100)
+            const id = env.pairing.getActivity().pairing?.attemptId
+
+            await jest.advanceTimersByTimeAsync(1200)
+
+            // the adopted attempt is the same one and finished once; no second attempt was needed
+            expect(id).toBeDefined()
+            expect(env.attemptsFor(trainer)).toBe(1)
+        })
+
+        test('a scan that is still preparing when the page is left never starts', async () => {
+            env = setup('page', configuration)
+            await env.enter()
+            await jest.advanceTimersByTimeAsync(10)
+            await env.pairing.stopScanning()
+            env.access.scan.mockClear()
+
+            const starting = env.pairing.startScanning([], { deviceList: true } as any)
+            await env.leave()
+            await starting
+            await jest.advanceTimersByTimeAsync(100)
+
+            expect(env.access.scan).not.toHaveBeenCalled()
+            expect(env.pairing.isScanning()).toBe(false)
         })
 
         test('OK hand-off: prepareStart() keeps the record of an attempt that is still running', async () => {
@@ -253,16 +264,7 @@ describe('DevicePairingService: leaving and re-entering the Pairing page', () =>
             expect(env.ride.cancelStart).not.toHaveBeenCalled()
         })
 
-        test('today: prepareStart() drops the scan record but lets the scan run into the ride start (known defect D6)', async () => {
-            await withScanInFlight()
-
-            await env.pairing.prepareStart()
-
-            expect(env.pairing.isScanning()).toBe(false)
-            expect(env.access.stopScan).not.toHaveBeenCalled()
-        })
-
-        test.failing('known defect D6: prepareStart() stops a running scan', async () => {
+        test('prepareStart() stops a running scan', async () => {
             await withScanInFlight()
 
             await env.pairing.prepareStart()
@@ -283,15 +285,7 @@ describe('DevicePairingService: leaving and re-entering the Pairing page', () =>
             return trainer
         }
 
-        test('today: leaving cancels the attempt that is running', async () => {
-            await withAttemptInFlight()
-
-            await env.leave()
-
-            expect(env.ride.cancelStart).toHaveBeenCalledTimes(1)
-        })
-
-        test.failing('known defect (decision 2, same flow as mobile): leaving does not cancel an attempt that is running', async () => {
+        test('leaving does not cancel an attempt that is running', async () => {
             await withAttemptInFlight()
 
             await env.leave()

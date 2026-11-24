@@ -1536,6 +1536,8 @@ export class DeviceRideService  extends IncyclistService{
             return;
 
         this.logEvent({message:'cancel start'})
+        // the start that is cancelled: a start that begins while the devices are being stopped is not ours to clear
+        const cancelled = this.startPromises
 
         // a per-device retry that is waiting for its device to stop must not start it afterwards
         this.retryPromises.forEach( (_p,udid)=> {
@@ -1544,6 +1546,7 @@ export class DeviceRideService  extends IncyclistService{
         })
 
         const adapters = this.getRideAdapters()
+        const cancelledAdapters = this.rideAdapters
 
         const promises:Array<Promise<boolean>> = []
         adapters?.forEach(ai=> {
@@ -1560,9 +1563,11 @@ export class DeviceRideService  extends IncyclistService{
         })
 
         await Promise.allSettled(promises)
-        this.startPromises = null;
+        if (this.startPromises===cancelled)
+            this.startPromises = null;
 
-        delete this.rideAdapters
+        if (this.rideAdapters===cancelledAdapters)
+            delete this.rideAdapters
 
         return true;
     }

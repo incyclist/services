@@ -7,9 +7,8 @@ import { PairingPageStateMachine } from './statemachine'
 /**
  * Characterization of the pairing page state machine around leaving and re-entering the page.
  *
- * Tests named `today:` pin behaviour as it is. Tests wrapped in `test.failing` are known defects that are
- * not fixed yet (re-entry while an attempt or scan is in flight): they pass as "expected to fail" and are
- * flipped to plain `test` by the change that fixes them.
+ * Re-entry while work of the visit before is still running: an attempt is adopted, a stop that is still
+ * running is waited for by the adapter, scans are stopped by the service on every leave.
  */
 describe('PairingPage state machine: leave and re-entry', () => {
 
@@ -24,6 +23,8 @@ describe('PairingPage state machine: leave and re-entry', () => {
         stopPairing = jest.fn().mockResolvedValue(undefined)
         stopScanning = jest.fn().mockResolvedValue(undefined)
         stop = jest.fn().mockResolvedValue(undefined)
+        activity: any = { stopping: false }
+        getActivity() { return this.activity }
     }
 
     let pairing: MockPairingService
@@ -194,19 +195,48 @@ describe('PairingPage state machine: leave and re-entry', () => {
 
     describe('re-entry while work of the previous visit is in flight', () => {
 
-        test('today (a): re-entering while an attempt is in flight starts a second attempt (known defect R3)', () => {
+        test('re-entering while an attempt is in flight adopts it: state Pairing, no second attempt', () => {
             startPairingPending()
             sm.stop()
+            pairing.activity = { pairing: { attemptId: 5, ageMs: 1000, udids: ['1'] }, stopping: false }
 
             sm.start(jest.fn())
             sm.onPageReady()
 
-            expect(pairing.startPairing).toHaveBeenCalledTimes(2)
+            expect(sm.state).toBe('Pairing')
+            expect(pairing.startPairing).toHaveBeenCalledTimes(1)
         })
 
-        test.failing('known defect R3: re-entering while an attempt is in flight does not start a second attempt', () => {
+        test('an adopted attempt that finishes sends the machine to Idle with a retry', async () => {
             startPairingPending()
             sm.stop()
+            pairing.activity = { pairing: { attemptId: 5, ageMs: 1000, udids: ['1'] }, stopping: false }
+            sm.start(jest.fn())
+
+            pairing.emit('pairing-done', { attemptId: 5 })
+
+            expect(sm.state).toBe('Idle')
+            expect((sm as any).retryTimeout).toBeDefined()
+        })
+
+        test('events of another attempt are ignored and logged', () => {
+            startPairingPending()
+            sm.stop()
+            pairing.activity = { pairing: { attemptId: 5, ageMs: 1000, udids: ['1'] }, stopping: false }
+            sm.start(jest.fn())
+            const logSpy = jest.spyOn((sm as any).logger, 'logEvent')
+
+            pairing.emit('pairing-done', { attemptId: 3 })
+
+            expect(sm.state).toBe('Pairing')
+            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'foreign attempt event ignored', attemptId: 3 }))
+        })
+
+        test('a stop that is still running at re-entry: Idle, the check starts a new attempt', () => {
+            startPairingPending()
+            sm.stop()
+            pairing.activity = { stopping: true }
+            pairing.startPairing.mockClear()
 
             sm.start(jest.fn())
             sm.onPageReady()
@@ -227,17 +257,6 @@ describe('PairingPage state machine: leave and re-entry', () => {
             await jest.advanceTimersByTimeAsync(0)
 
             expect((sm as any).pairingPromise).toBe(secondMarker)
-        })
-
-        test('today (b): re-entering while a scan is in flight starts a second scan (known defect R3/R4)', () => {
-            startScanningPending()
-            sm.stop()
-            ;(configMock.canStartRide as jest.Mock).mockReturnValue(false)
-
-            sm.start(jest.fn())
-            sm.onPageReady()
-
-            expect(pairing.startScanning).toHaveBeenCalledTimes(2)
         })
 
         test('today (d): re-entering while a stopPairing is still pending starts pairing straight away', async () => {

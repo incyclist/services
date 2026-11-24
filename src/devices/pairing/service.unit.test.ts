@@ -669,9 +669,9 @@ describe('PairingService',()=>{
                 expect(svc.getCapabilityData('control')).toMatchObject({connectState:'connected'})
             })
 
-            test('scanning still in flight: cancels the scan exactly as before (unchanged behaviour)',async ()=>{
+            test('scanning still in flight: stops the scan',async ()=>{
                 svc.simulateScanning()
-                const stop = jest.spyOn(svc as any,'_stop')
+                const stop = jest.spyOn(svc as any,'stopScanning')
 
                 await svc.prepareStart()
 
