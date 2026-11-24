@@ -168,7 +168,7 @@ export class PairingPageStateMachine {
     }
 
     protected stopWork( stopFn:()=>Promise<void> ):Promise<void> {
-        if (this.stopWorkPromise)
+        if (this.stopWorkPromise!==undefined)
             return this.stopWorkPromise
 
         const promise:Promise<void> = Promise.resolve(stopFn()).finally( ()=>{

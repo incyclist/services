@@ -501,7 +501,7 @@ export class DeviceAccessService  extends IncyclistService{
      */
     async scan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean,timeoutAllInterfaces?:boolean }={} ): Promise<DeviceSettings[]> {
         // a second request joins the running scan and gets its result (S4)
-        if (this.scanPromise) {
+        if (this.scanPromise!==undefined) {
             this.logEvent({message:'scan joined', requestedBy:'scan'})
             return this.scanPromise
         }

@@ -320,7 +320,7 @@ export class DevicePairingService  extends IncyclistService{
             this.state.initialized = false
             this.state.waiting = false;
             // an attempt that is still running keeps its record (and finishes on its own), anything else is dropped
-            if (forExit || !this.state.check?.promise)
+            if (forExit || this.state.check?.promise===undefined)
                 this.state.check = null;
             this.state.scan = null;
             
@@ -352,7 +352,7 @@ export class DevicePairingService  extends IncyclistService{
 
     // an attempt record without a device start never starts anything after the leave
     protected discardPreparingAttempt() {
-        if (this.state.check && !this.state.check.promise) {
+        if (this.state.check && this.state.check.promise===undefined) {
             if (this.state.check.to)
                 clearTimeout(this.state.check.to)
             delete this.state.check
@@ -366,8 +366,8 @@ export class DevicePairingService  extends IncyclistService{
         const check = this.state?.check
         const scan = this.state?.scan
         return {
-            pairing: check?.promise && check.id!==undefined ? { attemptId:check.id, ageMs:Date.now()-(check.startedAt??Date.now()), udids:check.udids??[] } : undefined,
-            scanning: scan && scan.id!==undefined ? { scanId:scan.id, kind:scan.kind } : undefined,
+            pairing: check?.promise!==undefined && check.id!==undefined ? { attemptId:check.id, ageMs:Date.now()-(check.startedAt??Date.now()), udids:check.udids??[] } : undefined,
+            scanning: scan?.id!==undefined ? { scanId:scan.id, kind:scan.kind } : undefined,
             stopping: this.stopOps>0
         }
     }
@@ -1124,7 +1124,7 @@ export class DevicePairingService  extends IncyclistService{
             this.settings = {}
             this.state.initialized = false
             this.state.waiting = false;
-            if (!stillPairing || !this.state.check?.promise) {
+            if (!stillPairing || this.state.check?.promise===undefined) {
                 this.state.check = null;
             }
             this.state.scan = null;
@@ -2564,7 +2564,7 @@ export class DevicePairingService  extends IncyclistService{
         this.emit('run')
 
         // an attempt of the visit before is still running: it keeps driving the loop
-        if (this.state.check?.promise && !this.deviceSelectState && !props.enforcedScan)
+        if (this.state.check?.promise!==undefined && !this.deviceSelectState && !props.enforcedScan)
             return
 
         // pairing already ongoing ? stop previous paring
@@ -2990,7 +2990,11 @@ export class DevicePairingService  extends IncyclistService{
         this.onPairingStarted()
 
         await this.awaitScanPromise(promise, scanId)
+        await this.onScanEnded(props, scanId, isSearch, token)
 
+    }
+
+    protected async onScanEnded(props: PairingProps, scanId:number, isSearch:boolean, token:object) {
         // a newer scan has replaced this one: its owner continues
         const superseded = this.isScanning()
         if (isSearch && !superseded)
@@ -2999,13 +3003,10 @@ export class DevicePairingService  extends IncyclistService{
         this.emit('scanning-done',{scanId})
         this.emitStateChange({capabilities:this.state.capabilities})
 
-
-        if (this.usage==='page' || superseded || token!==this.loopToken) {
-            return;
-        }
+        if (this.usage==='page' || superseded || token!==this.loopToken)
+            return
 
         await this.restartAfterScan(props, scanId, token)
-
     }
 
     protected getScanKind(isSearch:boolean, props:PairingProps):ScanKind {
