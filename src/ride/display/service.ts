@@ -75,6 +75,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected slowFlags = { devices:false, content:false, stall:false }
     protected slowLoggedPhases = new Set<StartPhase>()
     protected slowShown = false
+    protected isCancellingStart = false
     protected convertProgressKey: string
     protected deviceAttempts = new Map<string,{slow:boolean}>()
     /** sensors that the rider stopped waiting for (udid -> time), valid for the current ride only */
@@ -272,6 +273,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     async cancelStart() {
+        // a double click on "Cancel" must not run the cancel (and stop the ride) twice
+        if (this.isCancellingStart || this.state==='Closing' || this.state==='Finished')
+            return
+
+        this.isCancellingStart = true
         try {
             const props = this.getStartOverlayProps()
             const rideProps =  this.getRideModeService().getLogProps()
@@ -288,7 +294,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         catch(err) {
             this.logError(err,'cancelStart')
         }
-
+        finally {
+            this.isCancellingStart = false
+        }
     }
 
     pause(requester: 'user' | 'device'='user') {
