@@ -198,39 +198,20 @@ export class RouteCard extends BaseCard implements Card<Route> {
         if (!videoUrl)
             return true
 
-        // Some import/self-heal paths produce an extra leading slash (video:////, file:////)
-        // instead of the canonical video:///, file:///. Collapse that known malformation first,
-        // so the scheme-strip below always leaves the path's own leading slash intact rather
-        // than stripping it along with the scheme (which turned a well-formed video:/// URL
-        // into a relative path, e.g. "mnt/nas/..." instead of "/mnt/nas/...", and made
-        // videoExists() falsely report an existing file as missing).
-        const normalizedUrl = videoUrl.replace('video:////','video:///').replace('file:////','file:///')
-
-        let path = undefined
-        if ( normalizedUrl.startsWith('file:///') )
-            path = normalizedUrl.replace('file://','')
-
-        if ( normalizedUrl.startsWith('video:///') )
-            path = normalizedUrl.replace('video://','')
-
-        // "video:///C:\Users\..." -> "/C:\Users\..." after the scheme-strip above - strip the
-        // extra leading slash for Windows drive-letter paths (Unix absolute paths keep theirs,
-        // since they don't have this problem - a drive letter isn't its own root the way a
-        // Unix "/" is)
-        if ( path && /^\/[A-Za-z]:[\\/]/.test(path) )
-            path = path.slice(1)
+        // The stored URL is normally percent-encoded (encodeURI in the URL builders), but URLs
+        // that came from a platform file listing may already be decoded. fs.existsFile() needs
+        // the real path, so check the decoded spelling first and fall back to the raw one - a
+        // decoded name that literally contains e.g. "%20" must still be found.
+        // fileUrlToPath decodes before it removes the leading slash of a Windows drive-letter path:
+        // separators can be encoded too (file:///P:%5CVideos%5Ca.mp4).
+        const decoded = fileUrlToPath(videoUrl)
 
         // local file
-        if (path) {
-            // The stored URL is normally percent-encoded (encodeURI in the URL builders), but URLs
-            // that came from a platform file listing may already be decoded. fs.existsFile() needs
-            // the real path, so check the decoded spelling first and fall back to the raw one - a
-            // decoded name that literally contains e.g. "%20" must still be found.
-            const decoded = this.cleanupEncoding(path)
+        if (decoded) {
             if (await this.fileExists(decoded))
                 return true
-            return decoded!==path ? await this.fileExists(path) : false
-
+            const raw = fileUrlToPath(videoUrl, false)
+            return raw!==decoded ? await this.fileExists(raw!) : false
         }
         return true;
     }

@@ -228,9 +228,10 @@ export const buildFileUrl = (normalizedPath: string): string => {
  * percent-encoding is decoded, an absolute POSIX path keeps its leading `/` and a Windows path has no leading `/`
  * before its drive letter (`file:///C:/videos/a.mp4` -> `C:/videos/a.mp4`).
  *
+ * @param decode set to `false` to keep the percent-encoding as it is stored in the URL
  * @returns the path, or `undefined` if the URL is no local file URL
  */
-export const fileUrlToPath = (url?: string): string | undefined => {
+export const fileUrlToPath = (url?: string, decode = true): string | undefined => {
     const scheme = ['file:///', 'video:///'].find(prefix => url?.startsWith(prefix))
     if (!scheme)
         return undefined
@@ -240,7 +241,8 @@ export const fileUrlToPath = (url?: string): string | undefined => {
     while (path.startsWith('//'))
         path = path.slice(1)
 
-    path = safeDecode(path)
+    if (decode)
+        path = safeDecode(path)
     return /^\/[A-Za-z]:[\\/]/.test(path) ? path.slice(1) : path
 }
 
