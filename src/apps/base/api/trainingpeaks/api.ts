@@ -1,4 +1,6 @@
-import { AxiosResponse } from 'axios'
+import { AxiosRequestConfig, AxiosResponse } from 'axios'
+import { getBindings } from '../../../../api'
+import type { IFetchBinding } from '../../../../api/fetch/types'
 import { sleep } from '../../../../utils/sleep'
 import { trimXmlTextNodes } from '../../../../utils/xml'
 import { formatDay } from '../../utils'
@@ -12,6 +14,13 @@ import {
 const APP_URL = 'https://app.trainingpeaks.com'
 const SANDBOX_APP_URL = 'https://app.sandbox.trainingpeaks.com'
 const UPLOAD_CLIENT = 'Incyclist'
+
+/**
+ * User-Agent of the integration. The auth-server defines it (see `TP_INTEGRATION_VERSION`) and delivers it with the connect result and
+ * every refresh, so that the auth-server and the app send the same one. This is the one that is used until it was received.
+ */
+const DEFAULT_USER_AGENT = 'Incyclist/1.0.0'
+const VALID_USER_AGENT = /^[A-Za-z0-9._-]{1,32}\/[A-Za-z0-9._+-]{1,32}$/
 
 /** TrainingPeaks only supports a range of 45 days when requesting workouts */
 const MAX_WORKOUT_RANGE_DAYS = 45
@@ -219,6 +228,85 @@ export class TrainingPeaksApi extends OAuthAppApiBase<TrainingPeaksConfig, Train
         if (status === 415)
             return new Error('File format is not supported by TrainingPeaks')
         return this.mapUploadRejection(err)
+    }
+
+    /**
+     * TrainingPeaks requires every request to identify the client with `User-Agent: [client identifier]/[version]`
+     */
+    protected getAuthHeaders(): Record<string, string> {
+        return { ...super.getAuthHeaders(), 'User-Agent': this.getUserAgent() }
+    }
+
+    protected getUserAgent(): string {
+        const received = this.config?.userAgent
+        return this.isValidUserAgent(received) ? received : DEFAULT_USER_AGENT
+    }
+
+    /** a value that was received from the backend is only used if it is safe to be used as header value */
+    protected isValidUserAgent(value: unknown): value is string {
+        return typeof value === 'string' && VALID_USER_AGENT.test(value)
+    }
+
+    protected applyRefreshResponse(data: TrainingPeaksRefreshTokenResponse): void {
+        if (this.isValidUserAgent(data.user_agent))
+            this.config.userAgent = data.user_agent
+    }
+
+    // istanbul ignore next
+    protected getBindings() {
+        return getBindings()
+    }
+
+    /**
+     * A browser does not allow to set the `User-Agent` header (the request would be sent with the one of the browser).
+     * If the platform provides the `fetch` binding (desktop: issued from the main process, mobile: native networking),
+     * the request is sent through that binding. Otherwise the REST client is used.
+     */
+    protected async send(request: AxiosRequestConfig): Promise<AxiosResponse> {
+        const binding = this.getBindings()?.fetch
+        if (!binding)
+            return await super.send(request)
+
+        return await this.sendViaFetchBinding(binding, request)
+    }
+
+    protected async sendViaFetchBinding(binding: IFetchBinding, request: AxiosRequestConfig): Promise<AxiosResponse> {
+        const headers = { Accept: 'application/json, text/plain, */*', ...request.headers } as Record<string, string>
+
+        let body: string | undefined
+        if (request.data !== undefined) {
+            body = typeof request.data === 'string' ? request.data : JSON.stringify(request.data)
+            headers['Content-Type'] ??= 'application/json'
+        }
+
+        const res = await binding.fetch(request.url as string, { method: (request.method ?? 'get').toUpperCase(), headers, body })
+
+        const response = {
+            data: request.responseType === 'text' ? res.data : this.parseBody(res.data),
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers,
+            config: request
+        } as AxiosResponse
+
+        // behaves like the REST client: a rejected request is an error that carries the response
+        if (!res.ok)
+            throw Object.assign(new Error(`Request failed with status code ${res.status}`), { response })
+
+        return response
+    }
+
+    protected parseBody(text: string): unknown {
+        const trimmed = text?.trim()
+        if (!trimmed?.startsWith('{') && !trimmed?.startsWith('['))
+            return text
+
+        try {
+            return JSON.parse(trimmed)
+        }
+        catch {
+            return text
+        }
     }
 
     protected getExpiration(data: TrainingPeaksRefreshTokenResponse): Date {
