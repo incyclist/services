@@ -164,8 +164,7 @@ export abstract class OAuthAppConnection<
     }
 
     protected updateConfig(config: Config) {
-        const { accessToken, refreshToken, expiration } = config
-        this.config = { ...this.config, accessToken, refreshToken, expiration }
+        this.config = { ...this.config, ...config }
         this.saveCredentials()
     }
 

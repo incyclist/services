@@ -14,7 +14,13 @@ import {
 const APP_URL = 'https://app.trainingpeaks.com'
 const SANDBOX_APP_URL = 'https://app.sandbox.trainingpeaks.com'
 const UPLOAD_CLIENT = 'Incyclist'
-const USER_AGENT_NAME = 'Incyclist'
+
+/**
+ * User-Agent of the integration. The auth-server defines it (see `TP_INTEGRATION_VERSION`) and delivers it with the connect result and
+ * every refresh, so that the auth-server and the app send the same one. This is the one that is used until it was received.
+ */
+const DEFAULT_USER_AGENT = 'Incyclist/1.0.0'
+const VALID_USER_AGENT = /^[A-Za-z0-9._-]{1,32}\/[A-Za-z0-9._+-]{1,32}$/
 
 /** TrainingPeaks only supports a range of 45 days when requesting workouts */
 const MAX_WORKOUT_RANGE_DAYS = 45
@@ -232,8 +238,18 @@ export class TrainingPeaksApi extends OAuthAppApiBase<TrainingPeaksConfig, Train
     }
 
     protected getUserAgent(): string {
-        const version = this.getBindings()?.appInfo?.getAppVersion()
-        return `${USER_AGENT_NAME}/${version || 'unknown'}`
+        const received = this.config?.userAgent
+        return this.isValidUserAgent(received) ? received : DEFAULT_USER_AGENT
+    }
+
+    /** a value that was received from the backend is only used if it is safe to be used as header value */
+    protected isValidUserAgent(value: unknown): value is string {
+        return typeof value === 'string' && VALID_USER_AGENT.test(value)
+    }
+
+    protected applyRefreshResponse(data: TrainingPeaksRefreshTokenResponse): void {
+        if (this.isValidUserAgent(data.user_agent))
+            this.config.userAgent = data.user_agent
     }
 
     // istanbul ignore next

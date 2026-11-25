@@ -40,7 +40,8 @@ export class TrainingPeaksAppConnection extends OAuthAppConnection<TrainingPeaks
             id: credentials?.id === undefined ? undefined : String(credentials.id),
             accessToken: credentials?.accesstoken,
             refreshToken: credentials?.refreshtoken,
-            expiration: parseExpiration(credentials?.expiration)
+            expiration: parseExpiration(credentials?.expiration),
+            ...(credentials?.useragent ? { userAgent: credentials.useragent } : {})
         }
     }
 
@@ -49,7 +50,8 @@ export class TrainingPeaksAppConnection extends OAuthAppConnection<TrainingPeaks
             id: config.id,
             accesstoken: config.accessToken,
             refreshtoken: config.refreshToken,
-            expiration: config.expiration?.toISOString()
+            expiration: config.expiration?.toISOString(),
+            ...(config.userAgent ? { useragent: config.userAgent } : {})
         }
     }
 }

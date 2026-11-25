@@ -1,10 +1,16 @@
 import type { OAuthAppConfig, OAuthRefreshTokenResponse } from '../types'
 
 /** Credentials of the TrainingPeaks athlete */
-export type TrainingPeaksConfig = OAuthAppConfig
+export type TrainingPeaksConfig = OAuthAppConfig & {
+    /** User-Agent for the requests to TrainingPeaks, as defined by the auth-server (the same one the auth-server uses) */
+    userAgent?: string
+}
 
 /** Response of the auth-server's `POST /trainingpeaks/refresh` */
-export type TrainingPeaksRefreshTokenResponse = OAuthRefreshTokenResponse
+export type TrainingPeaksRefreshTokenResponse = OAuthRefreshTokenResponse & {
+    /** User-Agent for the requests to TrainingPeaks (not delivered by older versions of the auth-server) */
+    user_agent?: string
+}
 
 /** Formats of a structured workout file that can be downloaded (as listed in `WorkoutFileFormats` of a workout) */
 export type TrainingPeaksFileFormat = 'zwo' | 'erg' | 'mrc' | 'fit' | 'json'

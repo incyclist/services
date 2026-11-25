@@ -202,6 +202,16 @@ describe('TrainingPeaksAppConnection', () => {
             expect(service.isConnected()).toBe(true)
         })
 
+        test('the User-Agent delivered by the auth-server is persisted and used for the API', async () => {
+            const mocks: MockDefinition = { userSettings: UserSettingsMock(true, null), api: ApiMock({}) }
+            setupMocks(mocks)
+
+            await service.connect({ id: '42', accesstoken: 'a', refreshtoken: 'r', expiration: new Date('2024-01-01').toISOString(), useragent: 'Incyclist/1.0.0' })
+
+            expect(mocks.api?.init).toHaveBeenCalledWith(expect.objectContaining({ userAgent: 'Incyclist/1.0.0' }))
+            expect(mocks.userSettings?.set).toHaveBeenCalledWith(SETTINGS_KEY, expect.objectContaining({ useragent: 'Incyclist/1.0.0' }))
+        })
+
         test('expiration delivered by the auth-server as epoch milliseconds', async () => {
             const mocks: MockDefinition = { userSettings: UserSettingsMock(true, null), api: ApiMock({}) }
             setupMocks(mocks)

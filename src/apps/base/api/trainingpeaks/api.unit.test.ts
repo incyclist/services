@@ -25,7 +25,7 @@ describe('TrainingPeaks API', () => {
 
         api.getApi = jest.fn(() => restClient)
         api.getUserSettings = jest.fn(() => settings)
-        bindings = { appInfo: { getAppVersion: () => '1.2.3' } }
+        bindings = {}
         api.getBindings = jest.fn(() => bindings)
     })
 
@@ -85,19 +85,61 @@ describe('TrainingPeaks API', () => {
             expect(restClient.request).toHaveBeenCalledWith(expect.objectContaining({
                 method: 'get',
                 url: 'https://api.trainingpeaks.com/v1/athlete/profile',
-                headers: { Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' }
+                headers: { Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.0.0' }
             }))
             expect(response.data).toEqual({ ok: true })
         })
 
-        test('identifies the client with a User-Agent, even if the app version is not known', async () => {
-            bindings.appInfo = undefined
-            api.init({ ...initialConfig })
-            restClient.request.mockResolvedValue({ data: {} })
+        describe('User-Agent', () => {
+            const agentOfRequest = async () => {
+                restClient.request.mockResolvedValue({ data: {} })
+                await api.get('/v1/athlete/profile')
+                return restClient.request.mock.calls.at(-1)[0].headers['User-Agent']
+            }
 
-            await api.get('/v1/athlete/profile')
+            test('uses the default until the auth-server delivered one', async () => {
+                api.init({ ...initialConfig })
+                expect(await agentOfRequest()).toBe('Incyclist/1.0.0')
+            })
 
-            expect(restClient.request.mock.calls[0][0].headers['User-Agent']).toBe('Incyclist/unknown')
+            test('uses the one that was delivered with the connect result', async () => {
+                api.init({ ...initialConfig, userAgent: 'Incyclist/2.1.0' })
+                expect(await agentOfRequest()).toBe('Incyclist/2.1.0')
+            })
+
+            test.each([
+                ['line break', 'Incyclist/1.0\r\nX-Evil: 1'],
+                ['no version', 'Incyclist'],
+                ['too long', 'Incyclist/' + '1'.repeat(40)],
+                ['not a string', 42],
+            ])('ignores a stored value with %s', async (_n, value) => {
+                api.init({ ...initialConfig, userAgent: value })
+                expect(await agentOfRequest()).toBe('Incyclist/1.0.0')
+            })
+
+            test('takes the one that is delivered with a refresh and reports it with the updated token', async () => {
+                const onUpdate = jest.fn()
+                api.init({ ...initialConfig, expiration: new Date(NOW - 1000) }).on('token.updated', onUpdate)
+                restClient.request
+                    .mockResolvedValueOnce({ data: { access_token: 'a', refresh_token: 'b', expires_in: 600, user_agent: 'Incyclist/1.1.0' } })
+                    .mockResolvedValueOnce({ data: {} })
+
+                await api.get('/v1/athlete/profile')
+
+                expect(restClient.request.mock.calls[1][0].headers['User-Agent']).toBe('Incyclist/1.1.0')
+                expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ userAgent: 'Incyclist/1.1.0' }))
+            })
+
+            test('keeps the known one if a refresh delivers none (older auth-server) or an invalid one', async () => {
+                api.init({ ...initialConfig, expiration: new Date(NOW - 1000), userAgent: 'Incyclist/2.1.0' })
+                restClient.request
+                    .mockResolvedValueOnce({ data: { access_token: 'a', refresh_token: 'b', expires_in: 600, user_agent: 'bad value' } })
+                    .mockResolvedValueOnce({ data: {} })
+
+                await api.get('/v1/athlete/profile')
+
+                expect(restClient.request.mock.calls[1][0].headers['User-Agent']).toBe('Incyclist/2.1.0')
+            })
         })
 
         describe('via the fetch binding', () => {
@@ -119,7 +161,7 @@ describe('TrainingPeaks API', () => {
                 expect(restClient.request).not.toHaveBeenCalled()
                 expect(fetchBinding.fetch).toHaveBeenCalledWith(
                     'https://api.trainingpeaks.com/v2/workouts/2026-01-01/2026-01-30',
-                    { method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' }), body: undefined })
+                    { method: 'GET', headers: expect.objectContaining({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.0.0' }), body: undefined })
                 expect(response.data).toEqual([{ Id: 1 }])
             })
 
@@ -178,7 +220,7 @@ describe('TrainingPeaks API', () => {
 
             expect(restClient.request).toHaveBeenCalledTimes(2)
             expect(restClient.request.mock.calls[0][0].url).toBe('https://auth.incyclist.com/trainingpeaks/refresh')
-            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-access-token', 'User-Agent': 'Incyclist/1.2.3' })
+            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-access-token', 'User-Agent': 'Incyclist/1.0.0' })
         })
 
         test('refreshes if there is no expiration', async () => {
@@ -286,7 +328,7 @@ describe('TrainingPeaks API', () => {
             const request = restClient.request.mock.calls[0][0]
             expect(request.method).toBe('get')
             expect(request.url).toBe('https://api.trainingpeaks.com/v2/workouts/2026-01-05/2026-02-03')
-            expect(request.headers).toEqual({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' })
+            expect(request.headers).toEqual({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.0.0' })
         })
 
         test('returns an empty list if there is no data', async () => {
@@ -324,7 +366,7 @@ describe('TrainingPeaks API', () => {
 
             await api.getWorkouts(new Date(2026, 0, 5), new Date(2026, 0, 6))
 
-            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-at', 'User-Agent': 'Incyclist/1.2.3' })
+            expect(restClient.request.mock.calls[1][0].headers).toEqual({ Authorization: 'Bearer new-at', 'User-Agent': 'Incyclist/1.0.0' })
         })
     })
 
@@ -376,7 +418,7 @@ describe('TrainingPeaks API', () => {
             const post = restClient.request.mock.calls[0][0]
             expect(post.method).toBe('post')
             expect(post.url).toBe('https://api.trainingpeaks.com/v3/file')
-            expect(post.headers).toEqual({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.2.3' })
+            expect(post.headers).toEqual({ Authorization: 'Bearer old-access-token', 'User-Agent': 'Incyclist/1.0.0' })
             expect(post.data).toEqual({
                 UploadClient: 'Incyclist',
                 Filename: 'ride.tcx',

@@ -224,6 +224,7 @@ export abstract class OAuthAppApiBase<
             this.config.accessToken = data.access_token
             this.config.refreshToken = data.refresh_token
             this.config.expiration = this.getExpiration(data)
+            this.applyRefreshResponse(data)
 
             this.logger.logEvent({ message: `${name} refresh token result`, status: 'success' })
             this.observer.emit('token.updated', this.config)
@@ -233,6 +234,11 @@ export abstract class OAuthAppApiBase<
             this.logger.logEvent({ message: `${name} refresh token result`, status: 'error', error })
             throw err
         }
+    }
+
+    /** hook for apps that receive more than the tokens with a refresh (the tokens are already applied to the config) */
+    protected applyRefreshResponse(_data: TRefresh): void {
+        // nothing to do by default
     }
 
     /** reads a user setting, falling back to the default if the settings are not available (yet) */
