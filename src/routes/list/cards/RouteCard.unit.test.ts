@@ -104,6 +104,18 @@ describe('RouteCard.videoExists', () => {
             expect(existsFile).toHaveBeenCalledWith(realPath);
         });
 
+        test.each([
+            ['file:///P:%5CMultimedia%5CFiets%5Caround%20the%20moldau%5Cpraag1.mp4', 'P:\\Multimedia\\Fiets\\around the moldau\\praag1.mp4'],
+            ['video:///P:%5CMultimedia%5Cpraag1.mp4', 'P:\\Multimedia\\praag1.mp4'],
+            ['file:///C:/Users/klaus/Neuer%20Ordner/route.mp4', 'C:/Users/klaus/Neuer Ordner/route.mp4'],
+        ])('%s (Windows path with encoded separators) is checked without a leading slash', async (videoUrl, realPath) => {
+            onDisk(realPath);
+            const card = createCard({ hasVideo: true, videoUrl });
+
+            expect(await card.videoExists()).toBe(true);
+            expect(existsFile).toHaveBeenCalledWith(realPath);
+        });
+
         test('a URL that is already decoded is still found', async () => {
             onDisk('/mnt/nas/videos/Hochbärneck-1.avi');
             const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/Hochbärneck-1.avi' });

@@ -1,4 +1,5 @@
 import { FileInfo,  getBindings} from "../../../api";
+import { normalizeFileUrl } from '../../../utils/fileurl'
 import { RouteInfoText } from "../types";
 import { JSONObject } from "../../../utils/xml";
 import { LocalizedText } from "../../../i18n";
@@ -178,6 +179,8 @@ export const buildVideoUrl = (filePath: string): string => {
     return `video://${filePath}`
 }
 
+export { normalizeFileUrl }
+
 export const safeDecode = (path: string): string => {
     try {
         return decodeURIComponent(path);
@@ -228,9 +231,11 @@ export const buildFileUrl = (normalizedPath: string): string => {
  * percent-encoding is decoded, an absolute POSIX path keeps its leading `/` and a Windows path has no leading `/`
  * before its drive letter (`file:///C:/videos/a.mp4` -> `C:/videos/a.mp4`).
  *
+ * @param decode set to `false` to keep the percent-encoding as it is stored in the URL
  * @returns the path, or `undefined` if the URL is no local file URL
  */
-export const fileUrlToPath = (url?: string): string | undefined => {
+export const fileUrlToPath = (url?: string, decode = true): string | undefined => {
+    url = normalizeFileUrl(url)
     const scheme = ['file:///', 'video:///'].find(prefix => url?.startsWith(prefix))
     if (!scheme)
         return undefined
@@ -240,7 +245,8 @@ export const fileUrlToPath = (url?: string): string | undefined => {
     while (path.startsWith('//'))
         path = path.slice(1)
 
-    path = safeDecode(path)
+    if (decode)
+        path = safeDecode(path)
     return /^\/[A-Za-z]:[\\/]/.test(path) ? path.slice(1) : path
 }
 
@@ -274,7 +280,7 @@ const buildAbsolutePathTarget = (fileName: string, info: FileInfo, scheme: strin
         const parts = inputUrl.split('://');
         const targetPath = parts[1].replace(info.base, fileName)
         // Proper file URL syntax: scheme + :// + path (path already starts with /)
-        return `${scheme}://${targetPath}`
+        return normalizeFileUrl(`${scheme}://${targetPath}`)
     }
 
 }
@@ -290,7 +296,7 @@ const buildRelativePathTarget = (fileName: string, info: FileInfo, scheme: strin
     // Only use file:// URL scheme if path is absolute
     if (isAbsolutePath(fileName)) {
         // Use proper file URL syntax: scheme + :// + path (path already starts with /)
-        target.url = `${scheme}://${fileName}`;
+        target.url = normalizeFileUrl(`${scheme}://${fileName}`);
     } else {
         // Return relative path without file:// scheme
         target.url = fileName;

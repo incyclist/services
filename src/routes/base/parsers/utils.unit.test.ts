@@ -1,6 +1,6 @@
 import path from "path"
 import { FileInfo, getBindings } from "../../../api"
-import { buildFileUrl, buildVideoUrl, fileUrlToPath, getReferencedFileInfo } from "./utils"
+import { buildFileUrl, buildVideoUrl, fileUrlToPath, getReferencedFileInfo, normalizeFileUrl } from "./utils"
 
 describe('Incyclist Parser Utils',()=>{
 
@@ -305,5 +305,64 @@ describe('fileUrlToPath', () => {
 
     test.each([undefined, '', 'https://example.com/a.mp4', 'content://media/a.mp4', 'file://relative/a.mp4', 'video://./a.mp4'])('no local file url: %s', (url) => {
         expect(fileUrlToPath(url)).toBeUndefined()
+    })
+})
+
+const setPlatform = (platform: string) => {
+    getBindings().appInfo = { getOS: () => ({ platform }) } as any
+}
+
+describe('normalizeFileUrl', () => {
+    beforeEach(() => setPlatform('win32'))
+    afterEach(() => { getBindings().appInfo = undefined })
+
+    test.each(['linux', 'darwin', 'android', 'ios'])('is a no-op on %s', (platform) => {
+        setPlatform(platform)
+        expect(normalizeFileUrl('file://C:\\Videos\\a.mp4')).toBe('file://C:\\Videos\\a.mp4')
+        expect(fileUrlToPath('file://C:\\Videos\\a.mp4')).toBeUndefined()
+    })
+
+    test('is a no-op when the platform is unknown', () => {
+        getBindings().appInfo = undefined
+        expect(normalizeFileUrl('file://C:/a.mp4')).toBe('file://C:/a.mp4')
+    })
+
+    test.each([
+        ['file://C:\\Videos\\a.mp4', 'file:///C:\\Videos\\a.mp4'],
+        ['file://C:/Videos/a.mp4', 'file:///C:/Videos/a.mp4'],
+        ['file://P:%5CMultimedia%5Ca.mp4', 'file:///P:%5CMultimedia%5Ca.mp4'],
+        ['video://D:\\Videos\\a.mp4', 'video:///D:\\Videos\\a.mp4'],
+        ['file:////C:/Videos/a.mp4', 'file:///C:/Videos/a.mp4'],
+    ])('a drive-letter path gets exactly three slashes: %s', (url, expected) => {
+        expect(normalizeFileUrl(url)).toBe(expected)
+    })
+
+    test.each([
+        'file:///C:/Videos/a.mp4',
+        'file:///home/me/a.mp4',
+        'file://./relative/a.mp4',
+        'video:///data/a.mp4',
+        'https://example.com/a.mp4',
+        'content://media/a.mp4',
+        'incyclist:///data/a.mp4',
+    ])('other urls stay as they are: %s', (url) => {
+        expect(normalizeFileUrl(url)).toBe(url)
+    })
+
+    test.each([undefined, ''])('empty input is returned as it is: %s', (url) => {
+        expect(normalizeFileUrl(url)).toBe(url)
+    })
+})
+
+describe('fileUrlToPath with a two-slash Windows url', () => {
+    beforeEach(() => setPlatform('win32'))
+    afterEach(() => { getBindings().appInfo = undefined })
+
+    test.each([
+        ['file://C:\\Videos\\a.mp4', 'C:\\Videos\\a.mp4'],
+        ['file://P:%5CMultimedia%5Ca%20b.mp4', 'P:\\Multimedia\\a b.mp4'],
+        ['video://D:/Videos/a.mp4', 'D:/Videos/a.mp4'],
+    ])('%s', (url, expected) => {
+        expect(fileUrlToPath(url)).toBe(expected)
     })
 })
