@@ -1068,7 +1068,7 @@ export class DeviceRideService  extends IncyclistService{
             // are all adapters on the same interface down?
             const ifName = unhealthy.adapter.getInterface()
             const adapters = (this.rideAdapters ?? [unhealthy]).filter( ai=> ai.adapter.getInterface()===ifName)
-            const stillHealthy = adapters.filter(ai=>ai.isHealthy===undefined || ai.isHealthy===true)
+            const stillHealthy = adapters.filter(ai=>this.isDeliveringData(ai))
 
             this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, 
                             noDataSince: (tsNow-tsLastData), 
@@ -1089,30 +1089,46 @@ export class DeviceRideService  extends IncyclistService{
         }
     }
 
+    // A device that is being restarted has no health check, so its isHealthy flag is undefined - but it
+    // does not deliver data either. Counting it as healthy would hide that every device of the interface
+    // is down: devices usually fail one after the other, so the earlier ones are already in their restart loop
+    // when the last one is detected
+    private isDeliveringData(ai: AdapterRideInfo): boolean {
+        return !ai.isRestarting && (ai.isHealthy===undefined || ai.isHealthy===true)
+    }
+
     private async reconnectInterface(ifName: string, adapters: AdapterRideInfo[]) {
         if (this.reconnectBusy) {
             return;
         }
-
-        this.reconnectBusy = true;
 
         // simulator does not need to be restarted
         if (ifName==='simulator')
             return;
 
 
-        if (ifName==='ble') {            
+        if (ifName==='ble') {
             try {
                 throw new Error('ble interface restart request')
             }
             catch(err) {
                 this.logError(err,'reconnectInterface')
             }
-            this.reconnectBusy = false;
-            
+
             return;
         }
 
+        this.reconnectBusy = true;
+        try {
+            await this.restartInterfaceAndAdapters(ifName, adapters)
+        }
+        finally {
+            // must be released on every exit path, otherwise no interface restart is ever possible again
+            this.reconnectBusy = false;
+        }
+    }
+
+    private async restartInterfaceAndAdapters(ifName: string, adapters: AdapterRideInfo[]) {
 
         // stop ongoing restart attempts
         const restarting = adapters.filter( ai=>ai.isRestarting)??[]
@@ -1145,8 +1161,6 @@ export class DeviceRideService  extends IncyclistService{
         catch (err) {
             this.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
         }
-
-        this.reconnectBusy = false;
     }
 
 
