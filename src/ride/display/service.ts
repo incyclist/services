@@ -87,6 +87,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     /** sensors that the rider stopped waiting for (udid -> time), valid for the current ride only */
     protected ignoredDevices = new Map<string,number>()
     protected deviceRetries = 0
+    /** control devices that were restarted automatically after a failed start (once per ride start) */
+    protected autoRetried = new Set<string>()
+    /** control devices that are being restarted automatically right now */
+    protected reconnecting = new Set<string>()
     protected startTrigger: 'auto' | 'start-button' = 'auto'
     /** the next start-request is the result of retryStart(): devices that are already started must be kept */
     protected fullRetryPending = false
@@ -280,6 +284,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logDeviceButton('Retry device', device)
 
             this.ignoredDevices.delete(udid)
+            this.reconnecting.delete(udid)
             this.deviceRetries++
             device.status = 'Starting'
             delete device.stateText
@@ -332,7 +337,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 startPhase: props.startPhase ?? this.derivePhase(),
                 startElapsedMs: this.getStartElapsed(),
                 slowShown: this.slowShown,
-                deviceRetries: this.deviceRetries
+                deviceRetries: this.deviceRetries,
+                deviceAutoRetries: this.autoRetried.size,
+                controlStartState: this.getControlStartState()
             })
             await this.cancelDeviceRetries()
             await this.stopRide({noStateUpdates:true})
@@ -1554,6 +1561,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
     
     protected async onDeviceStartOK(device:AdapterStateInfo) {
+        this.reconnecting.delete(device.udid)
         this.onIgnoredDeviceStarted(device.udid)
 
         if (this.state!=='Starting')
@@ -1632,7 +1640,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
     }
 
-    protected onDeviceStartError(device)  {
+    protected onDeviceStartError(device, err?:Error)  {
         if (this.state!=='Starting')
             return
 
@@ -1640,6 +1648,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         if (!startDevice)
             return;
 
+        if (this.tryAutoRetry(startDevice, err))
+            return
+
+        this.reconnecting.delete(startDevice.udid)
         if (startDevice.status!=='Error') { 
             const key = startDevice.isControl ? 'Device' : 'Sensor'
             this.logEvent({ message: `${key} start error shown`, overlay: 'start overlay', device: startDevice.name, });
@@ -1649,6 +1661,69 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         startDevice.status = 'Error'
         this.checkStartStatus()
 
+    }
+
+    /**
+     * The start of the control device failed: restart it once, automatically, before the rider sees an error.
+     * The device was started when the Pairing page was left, so the start of the ride only resumes it. If that fails,
+     * the connection is gone, and a restart with a fresh connection is what the rider would do manually.
+     *
+     * @returns true if the device is being restarted, false if the failure is to be shown as it is
+     */
+    protected tryAutoRetry(startDevice:CurrentRideDeviceInfo, err?:Error):boolean {
+        if (!startDevice.isControl || startDevice.udid.startsWith('Simulator:') || this.isCancellingStart)
+            return false
+
+        const skipReason = this.getAutoRetrySkipReason(startDevice)
+        if (skipReason) {
+            this.logEvent({ message:'start auto-retry skipped', device:startDevice.name, reason:skipReason })
+            return false
+        }
+
+        this.startAutoRetry(startDevice, err)
+        return true
+    }
+
+    protected getAutoRetrySkipReason(startDevice:CurrentRideDeviceInfo):string|undefined {
+        if (this.autoRetried.has(startDevice.udid))
+            return 'already retried'
+        if (this.getDevicePairing()?.getActivity?.()?.pairing)
+            return 'pairing attempt active'
+        if (this.getDeviceRide().isDeviceReconnecting?.(startDevice.udid))
+            return 'already reconnecting'
+        return undefined
+    }
+
+    protected startAutoRetry(startDevice:CurrentRideDeviceInfo, err?:Error) {
+        const udid = startDevice.udid
+
+        this.logEvent({
+            message:'start auto-retry',
+            device: startDevice.name,
+            deviceRole: 'trainer',
+            controlInterface: this.getBikeInterface(),
+            reason: err?.message,
+            startElapsedMs: this.getStartElapsed()
+        })
+
+        this.autoRetried.add(udid)
+        this.reconnecting.add(udid)
+        // makes sure that a cancel stops the device that is being restarted
+        this.deviceRetries++
+
+        // the row stays on 'Starting': the failure is not shown, the slow timer starts again
+        startDevice.status = 'Starting'
+        delete startDevice.stateText
+        this.beginDeviceAttempt(udid)
+        this.checkStartStatus()
+
+        this.getDeviceRide().retryStartDevice(udid, this.getDeviceStartProps(), { stopFirst:true, trigger:'auto' })
+            .catch( retryErr=>{ this.logError(retryErr,'startAutoRetry') })
+    }
+
+    protected getControlStartState():string {
+        const control = this.deviceInfo?.find( d=>d.isControl)
+        return control ? this.getDeviceStartFields(control).startState : 'none'
     }
 
     protected onDeviceStartStatusUpdate(device,completed,total) { 
@@ -1772,14 +1847,18 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const starting = d.status==='Starting'
         const slow = starting && !ignored && this.deviceAttempts.get(d.udid)?.slow===true
 
+        // the progress of an upload takes precedence over the restart that it belongs to
+        const reconnecting = starting && !d.stateText && this.reconnecting.has(d.udid)
+
         let startState:StartDeviceState = 'starting'
         if (d.status==='Started') startState = 'started'
         else if (ignored) startState = 'ignored'
         else if (d.stateText) startState = 'uploading'
+        else if (reconnecting) startState = 'reconnecting'
         else if (d.status==='Error') startState = d.isControl ? 'failed' : 'not-connected'
 
         if (d.isControl) {
-            return { startState, slow, canRetry: starting && slow && !d.stateText, canIgnore: false }
+            return { startState, slow, canRetry: starting && slow && !d.stateText && !reconnecting, canIgnore: false }
         }
 
         const stuck = d.status==='Error' || (starting && slow)
@@ -1846,6 +1925,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.deviceAttempts.clear()
         this.ignoredDevices.clear()
         this.deviceRetries = 0
+        this.autoRetried.clear()
+        this.reconnecting.clear()
         this.startTrigger = 'auto'
         this.fullRetryPending = false
 
@@ -1855,6 +1936,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     /** a full retry of all devices: the time that devices are given starts again */
     protected restartDeviceTracking() {
         this.fullRetryPending = true
+        this.reconnecting.clear()
         this.slowFlags.devices = false
         this.armStartTimer('devices-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.devices = true })
     }

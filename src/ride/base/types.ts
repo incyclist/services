@@ -43,8 +43,11 @@ export type CurrentRideDeviceInfo = {
 /** Phase of the start overlay */
 export type StartPhase = 'devices' | 'content' | 'ready'
 
-/** Display state of a device row in the start overlay. 'failed' = control device, 'not-connected' = sensor */
-export type StartDeviceState = 'starting' | 'uploading' | 'started' | 'not-connected' | 'failed' | 'ignored'
+/**
+ * Display state of a device row in the start overlay. 'failed' = control device, 'not-connected' = sensor,
+ * 'reconnecting' = the control device is being restarted automatically after its start failed
+ */
+export type StartDeviceState = 'starting' | 'reconnecting' | 'uploading' | 'started' | 'not-connected' | 'failed' | 'ignored'
 
 /** Describes the content row (video, map, satellite, street view) of the start overlay */
 export type StartContentInfo = {
