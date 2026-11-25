@@ -6,6 +6,7 @@ import { Observer, Singleton } from "../../base/types";
 import { useOnlineStatusMonitoring } from "../../monitoring";
 import { useUserSettings } from "../../settings";
 import { addDays, getFirstDayOfCurrentWeek, JSONObject } from "../../utils";
+import { dedupeCalendarEntries } from "./dedupe";
 import { WorkoutSyncFactory } from "./sync";
 import { ScheduledWorkout, WorkoutCalendarEntry } from "./types";
 
@@ -76,7 +77,7 @@ export class WorkoutCalendarService extends IncyclistService{
             const from = getFirstDayOfCurrentWeek()
             const to = addDays( today,7)
             if (this.workouts) {
-                const workouts = this.workouts.filter( w=> w.day?.valueOf()>=from.valueOf() && w.day.valueOf()<=to.valueOf() )
+                const workouts = this.getVisibleWorkouts().filter( w=> w.day?.valueOf()>=from.valueOf() && w.day.valueOf()<=to.valueOf() )
                 workouts.sort( (a,b)=> a.day.valueOf() - b.day.valueOf() )
                 return workouts.map( w => this.getScheduledWorkout(w))
             }
@@ -105,7 +106,7 @@ export class WorkoutCalendarService extends IncyclistService{
             const now = new Date()
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-            const entry = this.workouts.find( w=> w.day?.toLocaleDateString()===today.toLocaleDateString() )
+            const entry = this.getVisibleWorkouts().find( w=> w.day?.toLocaleDateString()===today.toLocaleDateString() )
             return entry ? this.getScheduledWorkout(entry) : undefined
         }
         catch (err) {
@@ -193,6 +194,13 @@ export class WorkoutCalendarService extends IncyclistService{
         }
     }   
 
+    /**
+     * returns the entries of the calendar, without the workouts that are delivered by more than one source
+     */
+    protected getVisibleWorkouts():Array<WorkoutCalendarEntry> {
+        return dedupeCalendarEntries(this.workouts ?? [])
+    }
+
     protected  getScheduledWorkout(w: WorkoutCalendarEntry): ScheduledWorkout {
         return { type: 'scheduled', name: w.workout.name, id: `${w.source ?? ''}:${w.workoutId}`, ...w };
     }
@@ -250,6 +258,7 @@ export class WorkoutCalendarService extends IncyclistService{
             const observer = this.getWorkoutSyncFactory().sync(service)
             if (!observer) {
                 done()
+                return
             }
 
             this.syncInfo.observer = observer
@@ -279,8 +288,10 @@ export class WorkoutCalendarService extends IncyclistService{
 
             }
 
-            const onloaded = ( workouts)=>{
-                this.workouts = workouts.map( w => ({ ...w, observer:new Observer()}))
+            const onloaded = ( workouts:Array<WorkoutCalendarEntry>, services?:Array<string>)=>{
+                // only the entries of the services that delivered a full list are replaced, all others stay untouched
+                const kept = services ? (this.workouts??[]).filter( w=> !services.includes(w.source) ) : []
+                this.workouts = [ ...kept, ...workouts.map( w => ({ ...w, observer:new Observer()})) ]
                 this.checkIfScheduledCurrentDay()
                 this.syncInfo.listChanged = true
                 this.syncInfo.contentChanged = true
@@ -298,8 +309,8 @@ export class WorkoutCalendarService extends IncyclistService{
         const now = new Date()
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-        const workouts = this.workouts?.filter( w=> w.day?.toLocaleDateString()===today.toLocaleDateString() )??[]
-        if (workouts?.length>0)  {
+        const workouts = this.getVisibleWorkouts().filter( w=> w.day?.toLocaleDateString()===today.toLocaleDateString() )
+        if (workouts.length>0)  {
             this.emit('scheduled',workouts[0])
         }
             

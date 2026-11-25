@@ -35,7 +35,7 @@ export class WorkoutSyncFactory {
 
 
     /**
-     * Performs a route sync with all connected services or one specific service.
+     * Performs a workout sync with all connected services or one specific service.
      */
     sync( service?:string):Observer {
         const observer = new Observer()
@@ -53,28 +53,34 @@ export class WorkoutSyncFactory {
         }
 
 
-        target.forEach( sp=> {
+        // `loaded` is emitted (with the entries and the names of the providers) as soon as at least one provider delivered
+        // a full list, otherwise `done`. Changes of providers that completed their first sync earlier are signalled
+        // individually (`added`, `updated`, `deleted`).
+        // The entries are shared across providers, so that the result of one provider does not hide the one of another
+        const workouts: Array<WorkoutCalendarEntry> = []
+        const loadedServices: Array<string> = []
 
-            const workouts: Array<WorkoutCalendarEntry> = []
+        target.forEach( sp=> {
 
             const {service,syncProvider} = sp
             const so = syncProvider.sync()
 
-            const onDone= (event:string, entries:Array<WorkoutCalendarEntry>, service:string)=>{ 
+            const onDone= (event:string, entries:Array<WorkoutCalendarEntry>, service:string)=>{
 
                 if (event==='loaded') {
-                    entries.forEach( w=> { 
-                        workouts.push( { ...w, source:service }) 
+                    loadedServices.push(service)
+                    entries.forEach( w=> {
+                        workouts.push( { ...w, source:service })
                     })
-                    
+
                 }
 
                 delete syncs[service]
 
                 if (Object.keys(syncs).length===0) {
 
-                    if ( event==='loaded') {
-                        observer.emit('loaded', workouts)
+                    if ( loadedServices.length>0) {
+                        observer.emit('loaded', workouts, loadedServices)
 
                     }
                     else {
