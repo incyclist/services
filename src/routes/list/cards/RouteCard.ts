@@ -4,7 +4,7 @@ import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
 import { sleep } from "../../../utils/sleep";
 import { RouteApiDetail } from "../../base/api/types";
-import { fileUrlToPath } from "../../base/parsers/utils";
+import { fileUrlToPath, normalizeFileUrl } from "../../base/parsers/utils";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint,AppStatus  } from "../../base/types";
 import { BaseCard } from "./base";
@@ -162,7 +162,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
      */
     async recoverDownloadState():Promise<boolean> {
         const descr = this.getRouteDescription()
-        const localUrl = this.getRouteData()?.video?.url
+        const localUrl = normalizeFileUrl(this.getRouteData()?.video?.url)
 
         if (!descr?.hasVideo || descr.isLocal || descr.isDownloaded)
             return false
@@ -971,7 +971,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
         
 
-        const path = dropped.url.replace('file:///','')
+        const droppedUrl = normalizeFileUrl(dropped.url)
+        const path = droppedUrl.replace('file:///','')
         const exists = await this.fileExists(path)
         if (!exists) {
             return 'Could not open file'
@@ -979,10 +980,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         const descr = this.getRouteDescription()
         const details = this.getRouteData()
-        descr.videoUrl = dropped.url
+        descr.videoUrl = droppedUrl
         descr.videoFormat = ext
         details.video.file = undefined
-        details.video.url = dropped.url
+        details.video.url = droppedUrl
         details.video.format = ext
 
         this.save().catch( err=>{ this.logError(err,'onVideoSelected') })
