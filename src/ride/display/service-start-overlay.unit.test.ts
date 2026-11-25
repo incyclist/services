@@ -557,6 +557,153 @@ describe('RideDisplayService - start overlay', () => {
         })
     })
 
+    describe('automatic restart of the control device', () => {
+        const autoOptions = { stopFirst: true, trigger: 'auto' }
+
+        beforeEach(() => {
+            devices.isDeviceReconnecting = jest.fn().mockReturnValue(false)
+            service.start()
+            requestStart(trainer, hrm)
+        })
+
+        test('the first start error of the control device restarts it, and is not shown', () => {
+            devices.emit('start-error', { udid: 'T' }, new Error('could not send FE commands'))
+
+            expect(devices.retryStartDevice).toHaveBeenCalledWith('T', {}, autoOptions)
+            expect(row('T')).toEqual(OC({ status: 'Starting', startState: 'reconnecting', canRetry: false }))
+            expect(logged('Device start error shown')).toHaveLength(0)
+            expect(logged('start auto-retry')).toEqual([OC({
+                device: 'Trainer', deviceRole: 'trainer', reason: 'could not send FE commands', startElapsedMs: expect.any(Number)
+            })])
+        })
+
+        test('the second start error is shown', () => {
+            deviceError('T')
+            deviceError('T')
+
+            expect(devices.retryStartDevice).toHaveBeenCalledTimes(1)
+            expect(row('T')).toEqual(OC({ status: 'Error', startState: 'failed' }))
+            expect(logged('Device start error shown')).toHaveLength(1)
+        })
+
+        test('the row is started when the restart succeeded', () => {
+            deviceError('T')
+            deviceOK('T')
+
+            expect(row('T')).toEqual(OC({ status: 'Started', startState: 'started' }))
+            expect(service.reconnecting.size).toBe(0)
+        })
+
+        test('the 10s of the device start again, but there is no Retry while it reconnects', async () => {
+            deviceError('T')
+
+            await jest.advanceTimersByTimeAsync(10000)
+
+            expect(row('T')).toEqual(OC({ slow: true, startState: 'reconnecting', canRetry: false }))
+        })
+
+        test('the progress of an upload takes precedence over the restart', () => {
+            deviceError('T')
+            service.onDeviceStartStatusUpdate({ udid: 'T' }, 5, 10)
+
+            expect(row('T')).toEqual(OC({ startState: 'uploading', canRetry: false }))
+        })
+
+        test('a failed upload is restarted as well', () => {
+            service.onDeviceStartStatusUpdate({ udid: 'T' }, 5, 10)
+            deviceError('T')
+
+            expect(devices.retryStartDevice).toHaveBeenCalledWith('T', {}, autoOptions)
+            expect(row('T').startState).toBe('reconnecting')
+        })
+
+        test('a sensor is not restarted', () => {
+            deviceError('H')
+
+            expect(devices.retryStartDevice).not.toHaveBeenCalled()
+            expect(row('H')).toEqual(OC({ status: 'Error', startState: 'not-connected' }))
+        })
+
+        test('the simulator is not restarted', () => {
+            devices.emit('start-request', [{ ...trainer, udid: 'Simulator:1', name: 'Simulator' }])
+            deviceError('Simulator:1')
+
+            expect(devices.retryStartDevice).not.toHaveBeenCalled()
+        })
+
+        test('is skipped while a pairing attempt is still running', () => {
+            pairingMock.getActivity.mockReturnValue({ pairing: { attemptId: 1, ageMs: 5, udids: [] }, stopping: false })
+
+            deviceError('T')
+
+            expect(devices.retryStartDevice).not.toHaveBeenCalled()
+            expect(row('T').startState).toBe('failed')
+            expect(logged('start auto-retry skipped')).toEqual([OC({ device: 'Trainer', reason: 'pairing attempt active' })])
+        })
+
+        test('is skipped while the device is already being reconnected', () => {
+            devices.isDeviceReconnecting.mockReturnValue(true)
+
+            deviceError('T')
+
+            expect(devices.retryStartDevice).not.toHaveBeenCalled()
+            expect(row('T').startState).toBe('failed')
+            expect(logged('start auto-retry skipped')).toEqual([OC({ reason: 'already reconnecting' })])
+        })
+
+        test('is skipped while the start is being cancelled', () => {
+            service.isCancellingStart = true
+
+            deviceError('T')
+
+            expect(devices.retryStartDevice).not.toHaveBeenCalled()
+        })
+
+        test('a full retry of the rider does not earn another automatic restart', () => {
+            deviceError('T')
+            deviceError('T')
+
+            service.retryStart()
+            deviceError('T')
+
+            expect(devices.retryStartDevice).toHaveBeenCalledTimes(1)
+            expect(row('T').startState).toBe('failed')
+        })
+
+        test('a Retry of the rider takes over from the automatic restart', () => {
+            deviceError('T')
+
+            service.retryStartDevice('T')
+
+            expect(devices.retryStartDevice).toHaveBeenLastCalledWith('T', {})
+            expect(row('T').startState).toBe('starting')
+        })
+
+        test('a cancel stops the device that is restarted, and logs the restart', async () => {
+            deviceError('T')
+
+            await service.cancelStart()
+
+            expect(devices.cancelStart).toHaveBeenCalled()
+            expect(logged('start ride cancel')).toEqual([OC({ deviceAutoRetries: 1, controlStartState: 'reconnecting' })])
+        })
+
+        test('a cancel without restart logs the state of the control device', async () => {
+            await service.cancelStart()
+
+            expect(logged('start ride cancel')).toEqual([OC({ deviceAutoRetries: 0, controlStartState: 'starting' })])
+        })
+
+        test('an error of the device service does not escape', async () => {
+            devices.retryStartDevice.mockRejectedValue(new Error('x'))
+
+            deviceError('T')
+            await flush()
+
+            expect(service.logError).toHaveBeenCalledWith(expect.any(Error), 'startAutoRetry')
+        })
+    })
+
     describe('ignoreStartDevice', () => {
         test('closes the overlay if the sensor was the last thing the start waited for', () => {
             service.start()

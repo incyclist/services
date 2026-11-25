@@ -80,5 +80,13 @@ export interface PreparedRoute {
 }
 
 
+/** Options for the restart of a single device while the ride is starting */
+export interface DeviceRetryOptions {
+    /** stop the adapter before it is started again, even if its previous start has already ended (fresh connection) */
+    stopFirst?: boolean
+    /** who requested the restart: the rider (default) or the system after a failed start */
+    trigger?: 'user' | 'auto'
+}
+
 /** Outcome of the restart of a single device while the ride is starting */
 export type RetryResult = 'started' | 'failed' | 'stop-timeout' | 'cancelled'

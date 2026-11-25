@@ -1,7 +1,7 @@
 import { sleep } from "../../utils/sleep";
 import { useDeviceAccess } from "../access/service";
 import {AdapterInfo,  ExtendedIncyclistCapability,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
-import { AdapterRideInfo, AdapterStateInfo, DeviceSnapshot, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties, RetryResult } from "./types";
+import { AdapterRideInfo, AdapterStateInfo, DeviceRetryOptions, DeviceSnapshot, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties, RetryResult } from "./types";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { getLegacyInterface } from "../../utils/logging";
@@ -1425,9 +1425,10 @@ export class DeviceRideService  extends IncyclistService{
      *
      * @param udid the unique device id of the device
      * @param props the properties for the start of the device
+     * @param options optional: stop the adapter first (fresh connection), and who requested the restart
      * @returns true if the device was started
      */
-    async retryStartDevice(udid:string, props:RideServiceDeviceProperties):Promise<boolean> {
+    async retryStartDevice(udid:string, props:RideServiceDeviceProperties, options?:DeviceRetryOptions):Promise<boolean> {
         await this.lazyInit();
 
         const ai = this.getRideAdapters()?.find( a=>a.udid===udid)
@@ -1443,7 +1444,7 @@ export class DeviceRideService  extends IncyclistService{
         // supersedes the attempt that might still be running, so that its late events are dropped
         const token = this.beginStartAttempt(udid)
 
-        const promise = this.runDeviceRetry(ai, props, token)
+        const promise = this.runDeviceRetry(ai, props, token, options)
         this.retryPromises.set(udid, promise)
 
         let retryResult:RetryResult
@@ -1461,12 +1462,24 @@ export class DeviceRideService  extends IncyclistService{
             deviceRole: ai.isControl ? 'trainer' : 'sensor',
             retryResult,
             retryDurationMs: Date.now()-tsStart,
-            retryAttempt
+            retryAttempt,
+            retryTrigger: options?.trigger ?? 'user'
         })
         return retryResult==='started'
     }
 
-    protected async runDeviceRetry(ai:AdapterRideInfo, props:RideServiceDeviceProperties, token:number):Promise<RetryResult> {
+    /**
+     * Whether the device is already being restarted (health check restart, or a reconnect that the adapter
+     * runs itself). Another restart on top of it would interrupt the one in flight.
+     *
+     * @param udid the unique device id of the device
+     */
+    isDeviceReconnecting(udid:string):boolean {
+        const ai = this.rideAdapters?.find( a=>a.udid===udid)
+        return ai?.isRestarting===true || ai?.adapter?.isReconnecting?.()===true
+    }
+
+    protected async runDeviceRetry(ai:AdapterRideInfo, props:RideServiceDeviceProperties, token:number, options?:DeviceRetryOptions):Promise<RetryResult> {
         const udid = ai.udid
         try {
             if (ai.adapter.isStarted()) {
@@ -1474,7 +1487,7 @@ export class DeviceRideService  extends IncyclistService{
                 return 'started'
             }
 
-            if (this.inFlightStarts.has(udid)) {
+            if (this.inFlightStarts.has(udid) || options?.stopFirst) {
                 const stopped = await this.stopWithTimeout(ai, DEVICE_RETRY_STOP_TIMEOUT_MS)
                 if (this.startAttempts.get(udid)!==token)
                     return 'cancelled'

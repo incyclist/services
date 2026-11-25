@@ -118,6 +118,49 @@ describe('DeviceRideService - per-device start retry',()=>{
             expect(sensor.adapter.stop).not.toHaveBeenCalled()
         })
 
+        test('stops a device whose start has already ended first, if the restart asks for it',async ()=>{
+            const trainer = createInfo('1','2606',true)
+            setAdapters(trainer)
+            ;(trainer.adapter.start as jest.Mock).mockResolvedValueOnce(false)
+            await (service as any).startSingleAdapter(trainer,[],{},'start')
+            const order:string[] = []
+            ;(trainer.adapter.stop as jest.Mock).mockImplementation( async ()=> { order.push('stop'); return true })
+            ;(trainer.adapter.start as jest.Mock).mockImplementation( async ()=> { order.push('start'); return true })
+
+            const result = await service.retryStartDevice('1',{},{stopFirst:true, trigger:'auto'})
+
+            expect(result).toBe(true)
+            expect(order).toEqual(['stop','start'])
+            expect(service.logEvent).toHaveBeenCalledWith(expect.objectContaining({
+                message:'start device retry result', retryResult:'started', deviceRole:'trainer', retryTrigger:'auto'
+            }))
+        })
+
+        test('reports the rider as the trigger by default',async ()=>{
+            setAdapters(createInfo('2','2607'))
+
+            await service.retryStartDevice('2',{})
+
+            expect(service.logEvent).toHaveBeenCalledWith(expect.objectContaining({ message:'start device retry result', retryTrigger:'user' }))
+        })
+
+        test('a cancel while the device is stopped before the restart drops the restart',async ()=>{
+            const trainer = createInfo('1','2606',true)
+            setAdapters(trainer)
+            const stopped = deferred()
+            // only the stop of the restart is pending, the stop of the cancel itself returns
+            ;(trainer.adapter.stop as jest.Mock).mockReturnValueOnce(stopped.promise).mockResolvedValue(true)
+
+            const retry = service.retryStartDevice('1',{},{stopFirst:true, trigger:'auto'})
+            await new Promise( resolve=>setImmediate(resolve) )   // the restart is registered and waits for the stop
+            await service.cancelStart()
+            stopped.resolve(true)
+            const result = await retry
+
+            expect(result).toBe(false)
+            expect(trainer.adapter.start).not.toHaveBeenCalled()
+        })
+
         test('gives up after 5s if the device does not stop, and reports an error',async ()=>{
             jest.useFakeTimers()
             const sensor = createInfo('2','2607')
@@ -137,6 +180,33 @@ describe('DeviceRideService - per-device start retry',()=>{
             expect(sensor.adapter.start).toHaveBeenCalledTimes(1)
             expect(events).toEqual([{event:'start-error', udid:'2'}])
             expect(service.logEvent).toHaveBeenCalledWith(expect.objectContaining({ message:'start device retry result', retryResult:'stop-timeout' }))
+        })
+    })
+
+    describe('isDeviceReconnecting',()=>{
+
+        test('is false for a device that is not being restarted',()=>{
+            setAdapters(createInfo('1','2606',true))
+            expect(service.isDeviceReconnecting('1')).toBe(false)
+        })
+
+        test('is true while the health check restarts the device',()=>{
+            const trainer = createInfo('1','2606',true)
+            trainer.isRestarting = true
+            setAdapters(trainer)
+            expect(service.isDeviceReconnecting('1')).toBe(true)
+        })
+
+        test('is true while the adapter reconnects itself',()=>{
+            const trainer = createInfo('1','2606',true)
+            ;(trainer.adapter as any).isReconnecting = jest.fn().mockReturnValue(true)
+            setAdapters(trainer)
+            expect(service.isDeviceReconnecting('1')).toBe(true)
+        })
+
+        test('is false for an unknown device',()=>{
+            setAdapters(createInfo('1','2606',true))
+            expect(service.isDeviceReconnecting('9')).toBe(false)
         })
     })
 
