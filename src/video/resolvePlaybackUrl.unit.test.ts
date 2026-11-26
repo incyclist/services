@@ -1,3 +1,4 @@
+import { getBindings } from '../api'
 import { resolvePlaybackUrl } from './resolvePlaybackUrl'
 
 describe('resolvePlaybackUrl', () => {
@@ -40,5 +41,31 @@ describe('resolvePlaybackUrl', () => {
     test('undefined/empty input returns undefined', () => {
         expect(resolvePlaybackUrl(undefined)).toBeUndefined()
         expect(resolvePlaybackUrl('')).toBeUndefined()
+    })
+
+    describe('Windows drive-letter paths with encoded separators', () => {
+        const setPlatform = (platform?: string) => {
+            getBindings().appInfo = platform ? { getOS: () => ({ platform }) } as any : undefined
+        }
+        afterEach(() => { getBindings().appInfo = undefined })
+
+        test.each([
+            ['file:///C:%5CIncyclist_Video%5CDE_Lahntal%5CDE_Lahntal-Marburg.mp4', 'file:///C:\\Incyclist_Video\\DE_Lahntal\\DE_Lahntal-Marburg.mp4'],
+            ['file:///P:%5cMultimedia%5ca%20b.mp4', 'file:///P:\\Multimedia\\a%20b.mp4'],
+            ['video:///C:%5CVideos%5Ca.mp4', 'file:///C:\\Videos\\a.mp4'],
+        ])('%s: encoded separators are restored on Windows', (url, expected) => {
+            setPlatform('win32')
+            expect(resolvePlaybackUrl(url)).toBe(expected)
+        })
+
+        test.each(['file:///C:\\Videos\\a.mp4', 'file:///C:/Videos/a.mp4', 'file:///mnt/nas/a%5Cb.mp4'])('%s stays as it is on Windows', (url) => {
+            setPlatform('win32')
+            expect(resolvePlaybackUrl(url)).toBe(url)
+        })
+
+        test.each(['linux', 'darwin', 'android', 'ios', undefined])('is not touched on %s', (platform) => {
+            setPlatform(platform)
+            expect(resolvePlaybackUrl('file:///C:%5CVideos%5Ca.mp4')).toBe('file:///C:%5CVideos%5Ca.mp4')
+        })
     })
 })
