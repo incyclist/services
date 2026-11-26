@@ -1,3 +1,5 @@
+import { isWindows } from '../utils/fileurl'
+
 /**
  * Rewrites a route's stored video URL into the scheme actually used for playback.
  *
@@ -24,16 +26,31 @@ export const resolvePlaybackUrl = (url?: string): string | undefined => {
         fileName = fileName.replace('incyclist:', 'file:')
 
     if (fileName.startsWith('video:') && !lc.endsWith('.avi'))
-        return fileName.replace('video:', 'file:')
+        return restoreWindowsSeparators(fileName.replace('video:', 'file:'))
 
     if (fileName.startsWith('video:') && lc.endsWith('.avi'))
         return fileName
 
-    if (fileName.startsWith('file:') || fileName.startsWith('http:') || fileName.startsWith('https:') || fileName.startsWith('/'))
+    if (fileName.startsWith('file:'))
+        return restoreWindowsSeparators(fileName)
+
+    if (fileName.startsWith('http:') || fileName.startsWith('https:') || fileName.startsWith('/'))
         return fileName
 
     if (fileName.startsWith('content:'))
         return fileName
 
     return `./${fileName}`
+}
+
+/**
+ * Chromium's file: loader refuses percent-encoded path separators on Windows, so a stored
+ * `file:///C:%5CVideos%5Ca.mp4` (encodeURI of a backslash path) fails with "Format error" /
+ * "URL safety check", while `file:///C:\Videos\a.mp4` plays. Restores the separators of a
+ * drive-letter path. Windows only; every other URL is returned as it is.
+ */
+const restoreWindowsSeparators = (url: string): string => {
+    if (!isWindows() || !/^file:\/\/\/[A-Za-z]:/.test(url))
+        return url
+    return url.replace(/%5C/gi, '\\')
 }

@@ -13,4 +13,4 @@ export const normalizeFileUrl = (url?: string): string | undefined => {
     return url?.replace(/^(file|video):\/\/+(?=[A-Za-z]:(?:[\\/%]|$))/, '$1:///')
 }
 
-const isWindows = (): boolean => getBindings().appInfo?.getOS?.()?.platform === 'win32'
+export const isWindows = (): boolean => getBindings().appInfo?.getOS?.()?.platform === 'win32'
