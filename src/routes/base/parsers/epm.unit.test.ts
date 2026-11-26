@@ -94,7 +94,26 @@ describe('IncyclistParser',()=>{
 
 
             })
-    
+
+            test('GPS positions continue past the end of the video mappings',async ()=>{
+                const file = './__tests__/data/rlv/PositionsPastVideoEnd.epm'
+
+                getBindings().loader = { open: load}
+                const fileInfo:FileInfo = {type:'file', filename:file, name:'PositionsPastVideoEnd', base:'PositionsPastVideoEnd.epm', ext:'epm',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
+                const {data,details} = await parser.import(fileInfo)
+
+                expect(data.hasVideo).toBe(true)
+                expect(data.hasGpx).toBe(true)
+
+                const lastMapping = details.video.mappings.at(-1)
+                const pastEnd = details.points.filter( p => p.routeDistance > lastMapping.distance)
+                expect(pastEnd.length).toBe(4)
+                pastEnd.forEach( p => {
+                    expect(p.videoSpeed).toBeCloseTo(lastMapping.videoSpeed,5)
+                    expect(p.videoTime).toBeCloseTo(lastMapping.time,5)
+                })
+            })
+
     
         })
 

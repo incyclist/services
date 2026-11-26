@@ -232,38 +232,31 @@ export class EPMParser extends XMLParser{
     }
 
     private addVideoSpeed(route:RouteApiDetail) {
-        let prevSpeed ;
-        let prevTime ;
+        const mappings = route.video.mappings
+        const lastMapping = mappings.at(-1)
         let videoIdx = 0;
 
         route.points.forEach ( (p,idx) => {
             if (idx===0) {
-                p.videoSpeed = route.video.mappings[0].videoSpeed;
-                p.videoTime = route.video.mappings[0].time;
-                prevSpeed = p.videoSpeed;
-                prevTime = p.videoTime;
-            }
-            else {
-                if (p.routeDistance<=route.video.mappings[videoIdx].distance) {
-                    p.videoSpeed = prevSpeed;
-                    p.videoTime = prevTime;
-                }
-
-                while (videoIdx<route.video.mappings.length && p.routeDistance>route.video.mappings[videoIdx].distance)
-                    videoIdx++;
-
-                if (videoIdx<route.video.mappings.length) {
-
-                    p.videoSpeed = route.video.mappings[videoIdx].videoSpeed;
-                    const v = p.videoSpeed/3.6;
-
-                    p.videoTime = route.video.mappings[videoIdx].time - (route.video.mappings[videoIdx].distance-p.routeDistance)/v;
-                    prevSpeed = p.videoSpeed;
-                    prevTime = p.videoTime;
-                }
-
+                p.videoSpeed = mappings[0].videoSpeed;
+                p.videoTime = mappings[0].time;
+                return
             }
 
+            while (videoIdx<mappings.length && p.routeDistance>mappings[videoIdx].distance)
+                videoIdx++;
+
+            // GPS positions may continue beyond the end of the video: hold the video's final speed and time
+            if (videoIdx>=mappings.length) {
+                p.videoSpeed = lastMapping.videoSpeed;
+                p.videoTime = lastMapping.time;
+                return
+            }
+
+            const mapping = mappings[videoIdx]
+            p.videoSpeed = mapping.videoSpeed;
+            const v = p.videoSpeed/3.6;
+            p.videoTime = mapping.time - (mapping.distance-p.routeDistance)/v;
         })
     }
 

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<roadmovie>
+	<name>PositionsPastVideoEnd</name>
+	<id>00000000000000000000000000000239</id>
+	<video-file-path>PositionsPastVideoEnd.avi</video-file-path>
+	<framerate>25.0</framerate>
+	<start-frame>0</start-frame>
+	<end-frame>2500</end-frame>
+	<width>1920</width>
+	<height>1080</height>
+	<clipmapper>DistanceEp</clipmapper>
+	<mappings>
+		<mapping frame="0" distance="0" />
+		<mapping frame="250" distance="100" />
+		<mapping frame="500" distance="200" />
+		<mapping frame="750" distance="300" />
+		<mapping frame="1000" distance="400" />
+		<mapping frame="1250" distance="500" />
+		<mapping frame="1500" distance="600" />
+		<mapping frame="1750" distance="700" />
+		<mapping frame="2000" distance="800" />
+		<mapping frame="2250" distance="900" />
+		<mapping frame="2500" distance="1000" />
+	</mappings>
+	<segments />
+	<marks />
+	<informations />
+	<positions>
+		<position distance="0" lat="50.000000" lon="8.000000" />
+		<position distance="50" lat="50.000500" lon="8.000000" />
+		<position distance="100" lat="50.001000" lon="8.000000" />
+		<position distance="150" lat="50.001500" lon="8.000000" />
+		<position distance="200" lat="50.002000" lon="8.000000" />
+		<position distance="250" lat="50.002500" lon="8.000000" />
+		<position distance="300" lat="50.003000" lon="8.000000" />
+		<position distance="350" lat="50.003500" lon="8.000000" />
+		<position distance="400" lat="50.004000" lon="8.000000" />
+		<position distance="450" lat="50.004500" lon="8.000000" />
+		<position distance="500" lat="50.005000" lon="8.000000" />
+		<position distance="550" lat="50.005500" lon="8.000000" />
+		<position distance="600" lat="50.006000" lon="8.000000" />
+		<position distance="650" lat="50.006500" lon="8.000000" />
+		<position distance="700" lat="50.007000" lon="8.000000" />
+		<position distance="750" lat="50.007500" lon="8.000000" />
+		<position distance="800" lat="50.008000" lon="8.000000" />
+		<position distance="850" lat="50.008500" lon="8.000000" />
+		<position distance="900" lat="50.009000" lon="8.000000" />
+		<position distance="950" lat="50.009500" lon="8.000000" />
+		<position distance="1000" lat="50.010000" lon="8.000000" />
+		<position distance="1050" lat="50.010500" lon="8.000000" />
+		<position distance="1100" lat="50.011000" lon="8.000000" />
+		<position distance="1150" lat="50.011500" lon="8.000000" />
+		<position distance="1200" lat="50.012000" lon="8.000000" />
+	</positions>
+</roadmovie>
