@@ -20,6 +20,10 @@ const NO_DATA_THRESHOLD = 10000
 const UNHEALTHY_THRESHOLD = 60000
 const RESTART_TIMEOUT = 45000
 const RESTART_RETRY_DELAY = 60000
+// Minimum pause before the n-th restart of an interface within one ride. Once the list is exhausted, the interface is
+// not restarted any more and the devices are recovered one by one (an interface that keeps failing will not be fixed by
+// restarting it over and over)
+const INTERFACE_RESTART_BACKOFF = [0, 60000, 300000]
 
 // The background discovery of the interfaces is of no use while a ride is running: devices are connected
 // already and a reconnect re-uses their announcement. It only adds load (on mobile the Wifi interface keeps
@@ -74,6 +78,8 @@ export class DeviceRideService  extends IncyclistService{
     protected lastDataInfo: Record<string,number> = {}
     protected scanPausedForRide = false
     protected reconnectBusy: boolean
+    // per interface: number of restarts in the current ride and time of the last one
+    protected interfaceRestarts = new Map<string,{count:number, ts:number}>()
     protected prevUpdate: UpdateRequest
     protected logPaused: boolean = false
 
@@ -1074,19 +1080,40 @@ export class DeviceRideService  extends IncyclistService{
                             noDataSince: (tsNow-tsLastData), 
                             tsLastData:tsLastDataStr, stillHealthy:stillHealthy.length, onSameInterface:adapters.length  })
 
-            if ( !stillHealthy.length && adapters.length>1 && ifName!=='ble')  {
+            const interfaceDown = !stillHealthy.length && adapters.length>1 && ifName!=='ble'
+            if ( interfaceDown && this.mayRestartInterface(ifName) )  {
                 await this.reconnectInterface(ifName, adapters);
             }
             else {
-                await this.reconnectSingle(unhealthy);  
+                await this.reconnectSingle(unhealthy);
             }
         }
         catch(err) {
             this.logError(err,'prepareReconnect')
         }
         finally {
-            unhealthy.isRestarting = false;
+            // an adapter that was handed to a retry loop by the interface restart is still being restarted
+            if (!unhealthy.inRetryLoop)
+                unhealthy.isRestarting = false;
         }
+    }
+
+    // An interface that keeps failing is not fixed by restarting it again and again: every restart interrupts the
+    // devices that do work. The number of restarts per ride is limited and the pause between them grows.
+    private mayRestartInterface(ifName: string): boolean {
+        const {count,ts} = this.interfaceRestarts.get(ifName) ?? {count:0, ts:0}
+
+        if (count>=INTERFACE_RESTART_BACKOFF.length) {
+            this.logEvent({message:'interface restart limit reached', interface:ifName, restartCount:count})
+            return false
+        }
+        if (count>0 && Date.now()-ts<INTERFACE_RESTART_BACKOFF[count]) {
+            this.logEvent({message:'interface restart postponed', interface:ifName, restartCount:count, waitMs:INTERFACE_RESTART_BACKOFF[count]-(Date.now()-ts)})
+            return false
+        }
+
+        this.interfaceRestarts.set(ifName,{count:count+1, ts:Date.now()})
+        return true
     }
 
     // A device that is being restarted has no health check, so its isHealthy flag is undefined - but it
@@ -1197,56 +1224,58 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     private async reconnectAdapters(adapters: AdapterRideInfo[], ifName: string) {
-        const promisesStart = [];
-        adapters.forEach(ai => { 
-            this.stopHealthCheck(ai)           
-            promisesStart.push(ai.adapter.start()); 
-        });
+        if (adapters.length === 0)
+            return
 
-        if (promisesStart.length > 0) {
-            // to avoid channel collisions, start ant adapters in sequence
-            if (ifName === 'ant') {
-                for (let i = 0; i < promisesStart.length; i++) {
-                    try {
-                        await promisesStart[i];
-                    }
-                    catch {
-                        // ignore failures
-                    }
-                }
+        adapters.forEach(ai => { this.stopHealthCheck(ai) })
 
+        // to avoid channel collisions, start ant adapters in sequence. The start has to be called inside of the loop:
+        // calling it up front would start all adapters at the same time
+        if (ifName === 'ant') {
+            for (const ai of adapters) {
+                await this.startAdapterIgnoringFailure(ai)
+            }
+        }
+        else {
+            await Promise.allSettled(adapters.map( ai=>ai.adapter.start() ))
+        }
+
+        const failed: AdapterRideInfo[] = []
+        adapters.forEach( ai=> {
+            if (ai.adapter.isStarted()) {
+                this.logEvent({message:'device healthy', device:ai.adapter.getUniqueName(), udid:ai.udid })
+                this.startHealthCheck(ai)
             }
             else {
-                await Promise.allSettled(promisesStart);
+                failed.push(ai)
             }
+        })
 
+        this.logEvent({message:'restart interface done', interface:ifName, started:adapters.length-failed.length, failed:failed.length})
 
-            adapters.forEach( ai=> {
-                if (ai.adapter.isStarted()) {
-                    this.logEvent({message:'device healthy', device:ai.adapter.getUniqueName(), udid:ai.udid })                
-                    this.startHealthCheck(ai)
-                }
-            })
+        // a device that could not be started has no health check, so nothing would ever try to recover it
+        failed.forEach( ai=> {
+            this.logEvent({message:'adapter handed to retry loop', device:ai.adapter.getUniqueName(), udid:ai.udid})
+            this.markDeviceUnrecovered(ai)
+            this.reconnectSingle(ai).catch( err=>{ this.logError(err,'reconnectAdapters') })
+        })
+    }
+
+    private async startAdapterIgnoringFailure(ai: AdapterRideInfo) {
+        try {
+            await ai.adapter.start()
+        }
+        catch {
+            // ignore failures: the adapter is handed to the retry loop
         }
     }
 
     protected async stopDuringInterfaceRestart(unhealthy: AdapterRideInfo) {
+        // only a retry loop confirms that it has stopped. The adapter that triggered the interface restart is
+        // flagged as restarting too, but nobody would ever confirm for it
+        const waitForLoop = unhealthy.inRetryLoop ? this.waitForRetryLoopToStop(unhealthy.udid) : undefined
         this.emit('stop-adapter',unhealthy.udid)
-        if (unhealthy.isRestarting) {
-            
-            await  new Promise<void>( done=> {
-
-                const to = setTimeout( done, 65000)
-
-                this.once('stop-adapter-confirmed',(udid)=>{ 
-                    if(udid===unhealthy.udid) {
-                        clearTimeout(to)
-                        done()
-                    }
-                })
-        
-            })
-        }
+        await waitForLoop
         unhealthy.isRestarting = true;
         this.unsubscribeDeviceEvents(unhealthy.adapter)
 
@@ -1259,6 +1288,23 @@ export class DeviceRideService  extends IncyclistService{
         unhealthy.isRestarting = false;
 
     }
+    // resolves when the retry loop of the device has confirmed that it stopped (or after a timeout)
+    private waitForRetryLoopToStop(udid: string): Promise<void> {
+        return new Promise<void>( done=> {
+            const onConfirmed = (confirmed:string)=>{
+                if (confirmed===udid)
+                    finish()
+            }
+            const finish = ()=> {
+                clearTimeout(to)
+                this.off('stop-adapter-confirmed', onConfirmed)
+                done()
+            }
+            const to = setTimeout( finish, 65000)
+            this.on('stop-adapter-confirmed', onConfirmed)
+        })
+    }
+
     // A restart that never settles (stalled BLE stack) must not block the retry loop in reconnectSingle()
     // forever: it would leave the device without any further recovery attempt or log entry
     private async restartWithTimeout(unhealthy: AdapterRideInfo): Promise<boolean> {
@@ -1335,20 +1381,31 @@ export class DeviceRideService  extends IncyclistService{
 
     private async reconnectSingle(unhealthy: AdapterRideInfo) {
         unhealthy.isRestarting = true;
+        unhealthy.inRetryLoop = true;
 
         this.stopHealthCheck(unhealthy)
 
+        // The listeners have to be bound to this device: a stop request for another device must not end this loop
+        // (it would then keep running unnoticed, while the interface is restarted)
         let stopRequested = false;
-        this.once('stop-ride',()=>{ stopRequested= true;})
-        this.once('stop-adapter',(udid)=>{ 
-            if(udid===unhealthy.udid) 
-                stopRequested= true;
-        })
+        const onStopRide = ()=>{ stopRequested = true }
+        const onStopAdapter = (udid:string)=>{
+            if(udid===unhealthy.udid)
+                stopRequested = true
+        }
+        this.on('stop-ride', onStopRide)
+        this.on('stop-adapter', onStopAdapter)
 
-        await this.restartUntilDone(unhealthy, ()=>stopRequested)
-
-        unhealthy.isRestarting = false;
-        this.emit('stop-adapter-confirmed', unhealthy.udid)
+        try {
+            await this.restartUntilDone(unhealthy, ()=>stopRequested)
+        }
+        finally {
+            this.off('stop-ride', onStopRide)
+            this.off('stop-adapter', onStopAdapter)
+            unhealthy.isRestarting = false;
+            unhealthy.inRetryLoop = false;
+            this.emit('stop-adapter-confirmed', unhealthy.udid)
+        }
     }
 
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
@@ -1362,6 +1419,7 @@ export class DeviceRideService  extends IncyclistService{
 
         // getSelectedAdapters will cache data in this.rideAdapters. Therefore we need t
         this.cleanInternalCache()
+        this.interfaceRestarts.clear()
 
         const adapters = this.getRideAdapters()
         this.logEvent({message:'sending start request', retry:false,deviceInfo:adapters?.map( this.getAdapterStateInfo.bind(this) )})

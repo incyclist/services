@@ -10,6 +10,8 @@ export interface AdapterRideInfo extends AdapterInfo {
     tsLastData?: number
     isHealthy?: boolean
     isRestarting?: boolean
+    // a retry loop (reconnectSingle) is running for this adapter and has to be stopped before the adapter can be touched
+    inRetryLoop?: boolean
     dataStatus?: HealthStatus
     ivToCheck?: NodeJS.Timeout
     isControl?: boolean

@@ -570,6 +570,186 @@ describe('DeviceRideService',()=>{
             })
         })
 
+        describe('interface restart with adapters in a retry loop',()=>{
+            type Internals = {
+                rideAdapters: AdapterRideInfo[]
+                reconnectSingle: (ai:AdapterRideInfo)=>Promise<void>
+                performInterfaceReconnect: unknown
+                getEnabledCapabilities: unknown
+                mayRestartInterface: (ifName:string)=>boolean
+            }
+
+            let internals: Internals
+
+            const createAntInfo = (udid:string):AdapterRideInfo => {
+                const ai = createInfo(udid)
+                ;(ai.adapter.getInterface as jest.Mock).mockReturnValue('ant')
+                ai.adapter.start = jest.fn().mockResolvedValue(true)
+                ai.adapter.isStarted = jest.fn().mockReturnValue(true)
+                return ai
+            }
+
+            // lets the pending timers and promises run for the given time
+            const elapse = (ms:number) => jest.advanceTimersByTimeAsync(ms)
+
+            beforeEach( ()=>{
+                internals = service as unknown as Internals
+                internals.performInterfaceReconnect = jest.fn().mockResolvedValue(undefined)
+                internals.getEnabledCapabilities = jest.fn().mockReturnValue({enabledCapabilities:[]})
+                service.startHealthCheck = jest.fn()
+            })
+
+            // FE triggers the interface restart, HR (belt not present) is in its retry loop
+            const setupFeAndHr = async () => {
+                const fe = createAntInfo('fe')
+                const hr = createAntInfo('hr')
+                ;(hr.adapter.restart as jest.Mock).mockResolvedValue(false)
+                internals.rideAdapters = [fe,hr]
+
+                const hrLoop = internals.reconnectSingle(hr)
+                await elapse(1000)
+                expect(hr.inRetryLoop).toBe(true)
+
+                setLastData(service, fe)
+                return {fe,hr,hrLoop}
+            }
+
+            test('the retry loop of another adapter is stopped without waiting for a timeout',async ()=>{
+                const {fe,hr,hrLoop} = await setupFeAndHr()
+                ;(hr.adapter.isStarted as jest.Mock).mockReturnValue(false)
+
+                let done = false
+                const promise = service.prepareReconnect(fe).then( ()=>{ done = true })
+                await elapse(10000)
+
+                expect(done).toBe(true)
+                await hrLoop
+                await promise
+                expect(hr.adapter.stop).toHaveBeenCalled()
+            })
+
+            test('the adapter that triggered the restart does not wait for a confirmation',async ()=>{
+                const fe = createAntInfo('fe')
+                const hr = createAntInfo('hr')
+                internals.rideAdapters = [fe,hr]
+                hr.isHealthy = false
+                setLastData(service, fe)
+
+                let done = false
+                const promise = service.prepareReconnect(fe).then( ()=>{ done = true })
+                await elapse(5000)
+
+                expect(done).toBe(true)
+                await promise
+                expect(fe.adapter.start).toHaveBeenCalledTimes(1)
+            })
+
+            test('a stop request for one device does not end the retry loop of another device',async ()=>{
+                const hr = createAntInfo('hr')
+                ;(hr.adapter.restart as jest.Mock).mockResolvedValue(false)
+                const loop = internals.reconnectSingle(hr)
+                await elapse(1000)
+
+                service.emit('stop-adapter','fe')
+                await elapse(130000)
+
+                expect(hr.adapter.restart).toHaveBeenCalledTimes(3)
+                expect(hr.inRetryLoop).toBe(true)
+
+                service.emit('stop-ride')
+                await elapse(2000)
+                await loop
+                expect(hr.inRetryLoop).toBe(false)
+                expect(service.listenerCount('stop-adapter')).toBe(0)
+                expect(service.listenerCount('stop-ride')).toBe(0)
+            })
+
+            test('an adapter that could not be started is handed to the retry loop',async ()=>{
+                const {fe,hr,hrLoop} = await setupFeAndHr()
+                ;(fe.adapter.isStarted as jest.Mock).mockReturnValue(false)
+                ;(fe.adapter.restart as jest.Mock).mockResolvedValue(false)
+                ;(hr.adapter.isStarted as jest.Mock).mockReturnValue(false)
+                fe.dataStatus = 'amber'
+                const onHealth = jest.fn()
+                service.on('health', onHealth)
+
+                const promise = service.prepareReconnect(fe)
+                await elapse(10000)
+                await promise
+                await hrLoop
+
+                expect(fe.inRetryLoop).toBe(true)
+                expect(fe.isRestarting).toBe(true)
+                expect(fe.adapter.restart).toHaveBeenCalled()
+                expect(onHealth).toHaveBeenCalledWith('fe','red',[])
+
+                // a successful retry ends the loop
+                ;(fe.adapter.restart as jest.Mock).mockResolvedValue(true)
+                await elapse(65000)
+                expect(fe.inRetryLoop).toBe(false)
+                expect(fe.isRestarting).toBe(false)
+                service.emit('stop-ride')
+                await elapse(2000)
+            })
+
+            test('adapters of the ant interface are started one after the other',async ()=>{
+                const fe = createAntInfo('fe')
+                const hr = createAntInfo('hr')
+                const order: string[] = []
+                let releaseFe: ()=>void
+                ;(fe.adapter.start as jest.Mock).mockImplementation( ()=> new Promise<boolean>( resolve=>{
+                    order.push('fe start')
+                    releaseFe = ()=>{ order.push('fe done'); resolve(true) }
+                }))
+                ;(hr.adapter.start as jest.Mock).mockImplementation( async ()=>{ order.push('hr start'); return true })
+
+                const promise = (service as unknown as { reconnectAdapters: (a:AdapterRideInfo[],i:string)=>Promise<void> }).reconnectAdapters([fe,hr],'ant')
+                await elapse(1000)
+                expect(order).toEqual(['fe start'])
+
+                releaseFe()
+                await promise
+
+                expect(order).toEqual(['fe start','fe done','hr start'])
+            })
+
+            describe('interface restart limit',()=>{
+                test('limits the restarts per ride and increases the pause between them',()=>{
+                    jest.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+                    expect(internals.mayRestartInterface('ant')).toBe(true)
+
+                    expect(internals.mayRestartInterface('ant')).toBe(false) // the second one needs a pause of 60 s
+
+                    jest.advanceTimersByTime(60000)
+                    expect(internals.mayRestartInterface('ant')).toBe(true)
+                    expect(internals.mayRestartInterface('ant')).toBe(false) // the third one needs a pause of 5 min
+
+                    jest.advanceTimersByTime(300000)
+                    expect(internals.mayRestartInterface('ant')).toBe(true)
+
+                    jest.advanceTimersByTime(60*60000)
+                    expect(internals.mayRestartInterface('ant')).toBe(false)  // limit reached
+                    expect(internals.mayRestartInterface('serial')).toBe(true) // other interfaces are not affected
+                })
+
+                test('falls back to restarting the failed adapter only',async ()=>{
+                    const fe = createAntInfo('fe')
+                    const hr = createAntInfo('hr')
+                    internals.rideAdapters = [fe,hr]
+                    hr.isHealthy = false
+                    setLastData(service, fe)
+                    internals.mayRestartInterface = jest.fn().mockReturnValue(false)
+                    const reconnectInterface = jest.fn()
+                    ;(service as unknown as {reconnectInterface:unknown}).reconnectInterface = reconnectInterface
+
+                    await service.prepareReconnect(fe)
+
+                    expect(reconnectInterface).not.toHaveBeenCalled()
+                    expect(fe.adapter.restart).toHaveBeenCalledTimes(1)
+                })
+            })
+        })
+
         describe('no-data watchdog',()=>{
             const setReconnecting = (ai:AdapterRideInfo, reconnecting:boolean) => {
                 ai.adapter.isReconnecting = jest.fn().mockImplementation(()=>reconnecting)
