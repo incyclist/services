@@ -96,28 +96,67 @@ describe('DesktopWorkoutListPageService - actions', () => {
             expect(service.getPageDisplayProps().detailWorkoutId).toBe('1')
         })
 
-        test('Create card, first time: shows the info overlay instead of opening the link', () => {
+        test('unknown id is a quiet no-op (logged as event, not as error)', () => {
+            service.onCardOK('nope')
+            expect(s.logError).not.toHaveBeenCalled()
+            expect(s.logEvent).toHaveBeenCalledWith({ message: 'card not found', id: 'nope', fn: 'onCardOK' })
+        })
+
+        test('clicking a real card twice opens the details both times', () => {
+            load([makeList('myWorkouts', 'My', [makeCard('2', 'Workout')])])
+
+            service.onCardOK('2')
+            service.onCardOK('2')
+
+            expect(service.getPageDisplayProps().detailWorkoutId).toBe('2')
+            expect(s.logError).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('onCreateWorkout', () => {
+
+        test('first time: shows the info overlay instead of opening the link', () => {
             const create = makeCard('Create', 'WorkoutCreate', { link: 'https://x.y', firstTime: true })
             load([makeList('myWorkouts', 'My', [create])])
 
-            service.onCardOK('Create')
+            service.onCreateWorkout()
 
             expect(service.getPageDisplayProps().createInfo).toEqual({ markAsSeenDefault: true })
             expect(MockUI.openBrowserWindow).not.toHaveBeenCalled()
             expect(s.logEvent).toHaveBeenCalledWith({ message: 'Overlay shown', overlay: 'Create Workout Info' })
         })
 
-        test('Create card, not first time: opens the link', () => {
+        test('not first time: opens the link', () => {
             load([makeList('myWorkouts', 'My', [makeCard('Create', 'WorkoutCreate', { link: 'https://x.y', firstTime: false })])])
 
-            service.onCardOK('Create')
+            service.onCreateWorkout()
 
             expect(MockUI.openBrowserWindow).toHaveBeenCalledWith('https://x.y')
             expect(service.getPageDisplayProps().createInfo).toBeNull()
         })
 
-        test('unknown id is a logged no-op', () => {
-            service.onCardOK('nope')
+        test('works without a snapshot (nothing was handed out to the UI yet)', () => {
+            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts', 'My', [makeCard('Create', 'WorkoutCreate', { link: 'https://x.y', firstTime: false })])])
+
+            service.onCreateWorkout()
+
+            expect(MockUI.openBrowserWindow).toHaveBeenCalledWith('https://x.y')
+            expect(s.logError).not.toHaveBeenCalled()
+        })
+
+        test('works after the page was closed (snapshot cleared)', () => {
+            load([makeList('myWorkouts', 'My', [makeCard('Create', 'WorkoutCreate', { link: 'https://x.y', firstTime: false })])])
+            service.closePage()
+
+            service.onCreateWorkout()
+
+            expect(MockUI.openBrowserWindow).toHaveBeenCalledWith('https://x.y')
+            expect(s.logError).not.toHaveBeenCalled()
+        })
+
+        test('missing create card is logged as error', () => {
+            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts', 'My', [])])
+            service.onCreateWorkout()
             expect(s.logError).toHaveBeenCalled()
         })
     })
@@ -128,7 +167,7 @@ describe('DesktopWorkoutListPageService - actions', () => {
         beforeEach(() => {
             create = makeCard('Create', 'WorkoutCreate', { link: 'https://x.y', firstTime: true }, { markAsSeen: jest.fn() })
             load([makeList('myWorkouts', 'My', [create])])
-            service.onCardOK('Create')
+            service.onCreateWorkout()
         })
 
         test('with markAsSeen: marks the card, clears the overlay and opens the link', () => {

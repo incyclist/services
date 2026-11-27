@@ -20,6 +20,7 @@ import {
 
 const STEP_CHANGE_AUDIO_KEY = 'preferences.workouts.stepChangeAudioSignal'
 const CREATE_OVERLAY = 'Create Workout Info'
+const CREATE_CARD_ID = 'Create'
 const SURFACE = 'workout-details'
 const DISPLAY_TYPE_KEY = 'preferences.workoutListDisplayType'
 const DEFAULT_DISPLAY_TYPE: DisplayType = 'tiles'
@@ -163,7 +164,8 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
         try {
             const card = this.findSnapshotCard(id)
             if (!card) {
-                this.logError(new Error(`card not found: ${id}`), 'onCardOK')
+                // the page can be closed, or the lists rebuilt, between rendering a card and the click arriving
+                this.logEvent({ message: 'card not found', id, fn: 'onCardOK' })
                 return
             }
 
@@ -185,6 +187,26 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
     }
 
     /**
+     * The user clicked the (permanent) "Create Workout" button
+     *
+     * The create card is resolved from the domain lists and not from the snapshot, as the button is available
+     * independent of what was last handed out to the UI
+     */
+    onCreateWorkout(): void {
+        try {
+            const card = this.findWorkoutCard(CREATE_CARD_ID) as unknown as WorkoutCreateCard
+            if (!card) {
+                this.logError(new Error('create card not found'), 'onCreateWorkout')
+                return
+            }
+            this.onCreateCardOK(card)
+        }
+        catch (err) {
+            this.logError(err, 'onCreateWorkout')
+        }
+    }
+
+    /**
      * The user closed the "how to create a workout" overlay
      *
      * @param markAsSeen  true if the overlay should not be shown again
@@ -196,7 +218,7 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
 
             this.logEvent({ message: 'Overlay closed', overlay: CREATE_OVERLAY, markAsSeen })
 
-            const card = this.findSnapshotCard('Create') as unknown as WorkoutCreateCard
+            const card = this.findWorkoutCard(CREATE_CARD_ID) as unknown as WorkoutCreateCard
             if (markAsSeen)
                 card?.markAsSeen()
 
