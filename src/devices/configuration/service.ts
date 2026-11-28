@@ -190,6 +190,9 @@ export class DeviceConfigurationService  extends IncyclistService{
 //        if (this.hasFeature('VIRTUAL_SHIFTING')) {
             this.getDevicesFeatureToggle().add('VirtualShifting')
 //        }
+        if (this.hasFeature('KETTLER_V2')) {
+            this.getDevicesFeatureToggle().add('KettlerRacerBluetooth')
+        }
     }
 
     /** 

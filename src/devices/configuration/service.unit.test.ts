@@ -236,6 +236,37 @@ describe( 'DeviceConfigurationService',()=>{
 
     })
 
+    describe('initFeatureToggles',()=>{
+        let service:any
+        let toggle:any
+        let testData:any
+
+        beforeEach( ()=>{
+            service = new DeviceConfigurationService()
+            service.inject('UserSettings', {
+                getValue: jest.fn( (key,defVal) => testData[key]??defVal),
+            })
+            toggle = { add: jest.fn() }
+            service.getDevicesFeatureToggle = jest.fn().mockReturnValue(toggle)
+        })
+
+        afterEach( ()=>{
+            service.reset()
+        })
+
+        test('KETTLER_V2 not set: KettlerRacerBluetooth is not enabled',()=>{
+            testData = {}
+            service.initFeatureToggles()
+            expect(toggle.add).not.toHaveBeenCalledWith('KettlerRacerBluetooth')
+        })
+
+        test('KETTLER_V2 set: KettlerRacerBluetooth is enabled',()=>{
+            testData = {KETTLER_V2:true}
+            service.initFeatureToggles()
+            expect(toggle.add).toHaveBeenCalledWith('KettlerRacerBluetooth')
+        })
+    })
+
     describe('initLegacy', ()=>{
 
         let service;
@@ -250,6 +281,7 @@ describe( 'DeviceConfigurationService',()=>{
                 init: jest.fn(),
                 set: jest.fn(),
                 get: jest.fn( (key,defVal) => testData[key]||defVal),
+                getValue: jest.fn( (key,defVal) => defVal),
                 save: jest.fn(),
             })
 
